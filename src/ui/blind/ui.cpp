@@ -3,7 +3,6 @@
 #include <Arduino.h>
 
 #include <cmath>
-#include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -17,8 +16,9 @@
 /**
  * ui/ui.h on a board whose touch and speaker work but whose screen does not:
  * the AMOLED 1.75 with a dead panel. What would be drawn is narrated to the
- * serial console, as the headless build does; the glass is read for four
- * gestures that need no picture to aim at, each answered with a sound.
+ * serial console by ui/console, which the headless build shares; this half
+ * reads the glass for gestures that need no picture to aim at, each
+ * answered with a sound.
  *
  *  - A tap plays or pauses, with two notes rising or falling.
  *  - A swipe across the middle, left or right, skips to the next track or
@@ -64,10 +64,6 @@ constexpr float kTickStep = 0.05f;
 constexpr float kCentre = (board::kDisplayDiameter - 1) / 2.0f;
 constexpr float kRadius = board::kDisplayDiameter / 2.0f;
 
-/** One line per change rather than per call, as the headless build does. */
-char s_last[96] = {};
-bool s_blanked = false;
-
 // The press in progress.
 bool s_was_down = false;
 unsigned long s_down_seen_ms = 0;
@@ -90,44 +86,8 @@ unsigned long s_tap_ms = 0;
 
 unsigned long s_last_interaction_ms = 0;
 
-void say(const char* fmt, ...) {
-  char line[sizeof(s_last)];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(line, sizeof(line), fmt, args);
-  va_end(args);
-  if (strcmp(line, s_last) == 0) {
-    return;
-  }
-  snprintf(s_last, sizeof(s_last), "%s", line);
-  LOG_INFO("UI: %s", line);
-}
-
-const char* playbackName(PlaybackState state) {
-  switch (state) {
-    case PlaybackState::kPlaying:  return "playing";
-    case PlaybackState::kPaused:   return "paused";
-    case PlaybackState::kIdle:     return "idle";
-    case PlaybackState::kOff:      return "off";
-    default:                       return "unavailable";
-  }
-}
-
-/** The rules the round screen's volume arc follows, for the same reasons. */
-bool volumeAvailable(const PlayerState& state) {
-  if (state.volume < 0.0f || state.playback == PlaybackState::kUnavailable ||
-      state.playback == PlaybackState::kOff) {
-    return false;
-  }
-  return state.control_features == 0 ||
-         (state.control_features & services::ha::kFeatureVolumeSet) != 0;
-}
-
-bool powerOnForVolume(const PlayerState& state) {
-  return state.control_off &&
-         (state.control_features == 0 ||
-          (state.control_features & services::ha::kFeatureTurnOn) != 0);
-}
+using services::ha::powerOnForVolume;
+using services::ha::volumeAvailable;
 
 float angleOf(int x, int y) {
   return atan2f(y - kCentre, x - kCentre);
@@ -325,95 +285,6 @@ Input poll(Screen, const PlayerState* state) {
   }
   return out;
 }
-
-void showNowPlaying(const services::ha::PlayerState& state) {
-  say("%s | %s - %s | vol %.2f", playbackName(state.playback),
-      state.subtitle, state.title, state.volume);
-}
-
-void showBrowse() { say("browse list"); }
-void showSearch() { say("search"); }
-void showStatus(const DeviceStatus& s) {
-  say("status: %s, player %s%s%s%s%s, %s up %lu s, %s ch %d, %d dBm, "
-      "tx %.1f dBm",
-      s.hostname, s.player, s.control[0] ? ", volume " : "", s.control,
-      s.input[0] ? ", input " : "", s.input, s.ip,
-      s.uptime_s, s.ssid, s.channel, s.rssi, s.tx_dbm);
-}
-void showWifi(const char* note, const char* current) {
-  say("wifi networks%s%s (on %s)", note[0] ? ": " : "", note,
-      current[0] ? current : "none");
-}
-void showWifiNetworks(const WifiNetwork*, int count) {
-  say("wifi: %d networks", count);
-}
-// Nothing is ever chosen without a screen to choose on.
-const char* wifiChosenSsid() { return ""; }
-const char* wifiPassword() { return ""; }
-void showPlayers(const char* note) {
-  say("choose a player%s%s", note[0] ? ": " : "", note);
-}
-// Nothing is ever chosen without a screen to choose on.
-const char* playerChosen() { return ""; }
-// Nothing is tapped either, so the rows go nowhere.
-void settingsBegin(const char* title, const char* note) {
-  say("settings: %s", note[0] ? note : title);
-}
-void settingsAdd(const char*, const char*, SettingStyle) {}
-void showSettings(int) {}
-void showSettingPressed(int, bool) {}
-void showIsolate(const IsolateCard& card) {
-  say("isolate: %s (%d rooms)", card.title, card.room_count);
-}
-void showRestarting(const char* why) { say("restarting: %s", why); }
-void showSearchResults() { say("search results"); }
-void showSearching() { say("searching..."); }
-void showLoadingList() { say("loading library"); }
-void showLoading(const char* what) { say("loading %s", what); }
-
-void showCommandPending(Intent, bool) {}
-
-void showNeedsHaSetup() { say("needs Home Assistant setup"); }
-void showHaSignIn(const char*, const char* url, const char* name) {
-  say("link to %s: sign in at %s", name, url);
-}
-void showNoPlayer() { say("no player selected"); }
-void showHaUnreachable(const char* detail) { say("HA unreachable: %s", detail); }
-void showHaTokenRejected() { say("HA token rejected, tap to link again"); }
-void showPortal() { say("setup portal"); }
-void showConnecting(const char* ssid) { say("connecting to %s", ssid); }
-void tickConnecting() {}
-void showConnectFailed() { say("no Wi-Fi"); }
-void showWifiLost() { say("no Wi-Fi: signal lost"); }
-void showSettingsCleared() { say("settings cleared"); }
-
-void refreshElapsed(const services::ha::PlayerState&) {}
-
-bool isBlanked() { return s_blanked; }
-
-void blank() {
-  if (!s_blanked) {
-    s_blanked = true;
-    LOG_INFO("UI: stood down");
-  }
-}
-
-void wake() {
-  if (s_blanked) {
-    s_blanked = false;
-    s_last[0] = '\0';  // say the screen again once there is one
-    LOG_INFO("UI: awake");
-  }
-}
-
-// Artwork is pixels, and there are none. The app still calls these on every
-// track change, which costs nothing here and keeps the call sites honest.
-void requestArtwork(const char*) {}
-bool artworkPending(const char*) { return false; }
-bool takeArtworkFinished() { return false; }
-void clearArtwork() {}
-
-bool idleWork(Screen) { return false; }
 
 unsigned long lastInteractionMs() { return s_last_interaction_ms; }
 

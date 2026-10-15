@@ -91,6 +91,10 @@ enum class Intent : uint8_t {
   kRelinkHa,          // the Token rejected chip on now playing: link again
   kSeek,              // a drag along the progress line let go: `level` is
                       // where, 0.0-1.0 of the track's duration
+  // A board without a screen (ui/blind):
+  kTalkStart,         // a press held still: a voice request while it is held
+  kTalkEnd,           // that press let go
+  kSayNowPlaying,     // a double tap: say what is playing
 };
 
 struct Input {

@@ -86,6 +86,11 @@ std::atomic<bool> g_poll_now{false};
  *  switched off. Handed to the poll task rather than called from the loop:
  *  turn_off is a network round trip. */
 std::atomic<bool> g_turn_off_control{false};
+/** A voice request has started and the music should pause. Handed to the
+ *  poll task for the same reason: on the loop the pause held touch unread
+ *  for as long as Home Assistant took to answer, and a hold let go
+ *  meanwhile went on listening. */
+std::atomic<bool> g_pause_for_voice{false};
 
 unsigned long g_last_elapsed_ms = 0;
 /** When the browse list or search screen was last opened, for
@@ -1625,11 +1630,41 @@ bool startingSettled();
   g_poll_now = true;
 }
 
-/** The wake word, heard: a voice request from where it ended, and the music
- *  paused if it is playing, so the command is heard over it. The request
- *  first -- the command is already being said -- and the pause after, which
- *  waits on Home Assistant. Not resumed after: the command may be the
- *  music's. */
+/** A voice request has started: the music paused if it is playing, so the
+ *  command is heard over it -- by the poll task, so nothing here waits on
+ *  Home Assistant. Not resumed after: the command may be the music's. */
+void pauseForVoice() {
+  PlayerState now;
+  if (snapshotState(now) && now.playback == PlaybackState::kPlaying) {
+    g_pause_for_voice = true;
+    g_poll_now = true;
+  }
+}
+
+/** The poll task's half of pauseForVoice(): media_pause to whatever the room
+ *  is hearing, as play/pause would send it, `selected` being the player. */
+void pauseMusicForVoice(const char* selected) {
+  PlayerState now;
+  if (!snapshotState(now) || now.playback != PlaybackState::kPlaying) {
+    return;
+  }
+  const char* entity =
+      now.media_entity[0] != '\0' ? now.media_entity : selected;
+  if (now.transport_entity[0] != '\0') {
+    entity = now.transport_entity;
+  }
+  if (!services::ha::callService("media_pause", entity)) {
+    return;
+  }
+  if (g_state_mutex != nullptr &&
+      xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    g_state.playback = PlaybackState::kPaused;
+    xSemaphoreGive(g_state_mutex);
+    g_state_dirty = true;
+  }
+}
+
+/** The wake word, heard: a voice request from where it ended. */
 [[gnu::noinline]] void handleWakeWord() {
   uint32_t position = 0;
   if (!services::wake_word::takeDetection(position)) {
@@ -1639,9 +1674,32 @@ bool startingSettled();
     LOG_INFO("VOICE: wake word heard, but no request can start now");
     return;
   }
-  PlayerState now;
-  if (snapshotState(now) && now.playback == PlaybackState::kPlaying) {
-    sendCommand(Intent::kPlayPause);
+  pauseForVoice();
+}
+
+/** What is playing, said aloud, where there is no screen to read it from:
+ *  "Song, by Artist", "Paused: Song, by Artist", or that nothing is. */
+void sayNowPlaying(const PlayerState* state) {
+  char text[200];
+  if (state == nullptr || state->offline) {
+    snprintf(text, sizeof(text), "Home Assistant is not answering.");
+  } else if (state->title[0] == '\0' ||
+             state->playback == PlaybackState::kIdle ||
+             state->playback == PlaybackState::kOff ||
+             state->playback == PlaybackState::kUnavailable) {
+    snprintf(text, sizeof(text), "Nothing is playing.");
+  } else {
+    const bool paused = state->playback == PlaybackState::kPaused;
+    if (state->artist[0] != '\0') {
+      snprintf(text, sizeof(text), "%s%s, by %s.", paused ? "Paused: " : "",
+               state->title, state->artist);
+    } else {
+      snprintf(text, sizeof(text), "%s%s.", paused ? "Paused: " : "",
+               state->title);
+    }
+  }
+  if (!services::voice::say(text)) {
+    LOG_INFO("VOICE: cannot speak now");
   }
 }
 
@@ -2499,6 +2557,22 @@ void portalIdle() {
       }
       break;
 
+    case Intent::kTalkStart:
+      if (services::voice::start()) {
+        pauseForVoice();
+      } else {
+        LOG_INFO("VOICE: held to talk, but no request can start now");
+      }
+      break;
+
+    case Intent::kTalkEnd:
+      services::voice::finish();
+      break;
+
+    case Intent::kSayNowPlaying:
+      sayNowPlaying(have_state ? snapshot : nullptr);
+      break;
+
     case Intent::kRelinkHa:
       // The chip says what the card says, and does what its tap does.
       if (services::ha::configured() && services::ha::tokenRejected()) {
@@ -2732,6 +2806,9 @@ void haPollTask(void*) {
       if (g_turn_off_control) {
         g_turn_off_control = false;
         powerOffControl();
+      }
+      if (g_pause_for_voice.exchange(false)) {
+        pauseMusicForVoice(entity);
       }
 
       // Load the browse list ahead of anyone asking for it, so a swipe up

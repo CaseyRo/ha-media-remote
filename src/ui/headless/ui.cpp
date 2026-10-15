@@ -2,22 +2,10 @@
 #include "config.h"
 #include "log.h"
 
-#include <Arduino.h>
-
-#include <cstdarg>
-#include <cstdio>
-#include <cstring>
-
 /**
- * ui/ui.h with no panel behind it.
- *
- * The remote is perfectly capable of running without a display: it polls Home
- * Assistant, tracks the player, honours the idle timer and sends every
- * service call it would otherwise send. All that is missing is somewhere to
- * put the picture. This narrates to the serial console instead.
- *
- * It reports no input, so a headless build is a remote that watches rather
- * than one that is used.
+ * ui/ui.h with no panel behind it: what it shows is narrated by
+ * ui/console, which it shares with ui/blind, and it reports no input, so a
+ * headless build is a remote that watches rather than one that is used.
  *
  * It exists for two reasons. It is what the firmware links against while a
  * panel is being brought up -- everything above ui/ui.h can be built and
@@ -26,38 +14,6 @@
  * that leaked.
  */
 namespace ui {
-namespace {
-
-/** One line per change rather than per call: several of these land on every
- *  loop pass, and a console scrolling at that rate is no more readable than
- *  no console at all. */
-char s_last[96] = {};
-bool s_blanked = false;
-
-void say(const char* fmt, ...) {
-  char line[sizeof(s_last)];
-  va_list args;
-  va_start(args, fmt);
-  vsnprintf(line, sizeof(line), fmt, args);
-  va_end(args);
-  if (strcmp(line, s_last) == 0) {
-    return;
-  }
-  snprintf(s_last, sizeof(s_last), "%s", line);
-  LOG_INFO("UI: %s", line);
-}
-
-const char* playbackName(services::ha::PlaybackState state) {
-  switch (state) {
-    case services::ha::PlaybackState::kPlaying:  return "playing";
-    case services::ha::PlaybackState::kPaused:   return "paused";
-    case services::ha::PlaybackState::kIdle:     return "idle";
-    case services::ha::PlaybackState::kOff:      return "off";
-    default:                                     return "unavailable";
-  }
-}
-
-}  // namespace
 
 // No panel, so nothing in PSRAM to compete with.
 size_t psramMallocFromBytes() { return config::kPsramMallocFromBytes; }
@@ -68,95 +24,6 @@ bool init(uint8_t) {
 }
 
 Input poll(Screen, const services::ha::PlayerState*) { return Input{}; }
-
-void showNowPlaying(const services::ha::PlayerState& state) {
-  say("%s | %s - %s | vol %.2f", playbackName(state.playback),
-      state.subtitle, state.title, state.volume);
-}
-
-void showBrowse() { say("browse list"); }
-void showSearch() { say("search"); }
-void showStatus(const DeviceStatus& s) {
-  say("status: %s, player %s%s%s%s%s, %s up %lu s, %s ch %d, %d dBm, "
-      "tx %.1f dBm",
-      s.hostname, s.player, s.control[0] ? ", volume " : "", s.control,
-      s.input[0] ? ", input " : "", s.input, s.ip,
-      s.uptime_s, s.ssid, s.channel, s.rssi, s.tx_dbm);
-}
-void showWifi(const char* note, const char* current) {
-  say("wifi networks%s%s (on %s)", note[0] ? ": " : "", note,
-      current[0] ? current : "none");
-}
-void showWifiNetworks(const WifiNetwork*, int count) {
-  say("wifi: %d networks", count);
-}
-// Nothing is ever chosen without a screen to choose on.
-const char* wifiChosenSsid() { return ""; }
-const char* wifiPassword() { return ""; }
-void showPlayers(const char* note) {
-  say("choose a player%s%s", note[0] ? ": " : "", note);
-}
-// Nothing is ever chosen without a screen to choose on.
-const char* playerChosen() { return ""; }
-// Nothing is tapped either, so the rows go nowhere.
-void settingsBegin(const char* title, const char* note) {
-  say("settings: %s", note[0] ? note : title);
-}
-void settingsAdd(const char*, const char*, SettingStyle) {}
-void showSettings(int) {}
-void showSettingPressed(int, bool) {}
-void showIsolate(const IsolateCard& card) {
-  say("isolate: %s (%d rooms)", card.title, card.room_count);
-}
-void showRestarting(const char* why) { say("restarting: %s", why); }
-void showSearchResults() { say("search results"); }
-void showSearching() { say("searching..."); }
-void showLoadingList() { say("loading library"); }
-void showLoading(const char* what) { say("loading %s", what); }
-
-void showCommandPending(Intent, bool) {}
-
-void showNeedsHaSetup() { say("needs Home Assistant setup"); }
-void showHaSignIn(const char*, const char* url, const char* name) {
-  say("link to %s: sign in at %s", name, url);
-}
-void showNoPlayer() { say("no player selected"); }
-void showHaUnreachable(const char* detail) { say("HA unreachable: %s", detail); }
-void showHaTokenRejected() { say("HA token rejected, tap to link again"); }
-void showPortal() { say("setup portal"); }
-void showConnecting(const char* ssid) { say("connecting to %s", ssid); }
-void tickConnecting() {}
-void showConnectFailed() { say("no Wi-Fi"); }
-void showWifiLost() { say("no Wi-Fi: signal lost"); }
-void showSettingsCleared() { say("settings cleared"); }
-
-void refreshElapsed(const services::ha::PlayerState&) {}
-
-bool isBlanked() { return s_blanked; }
-
-void blank() {
-  if (!s_blanked) {
-    s_blanked = true;
-    LOG_INFO("UI: stood down");
-  }
-}
-
-void wake() {
-  if (s_blanked) {
-    s_blanked = false;
-    s_last[0] = '\0';  // say the screen again once there is one
-    LOG_INFO("UI: awake");
-  }
-}
-
-// Artwork is pixels, and there are none. The app still calls these on every
-// track change, which costs nothing here and keeps the call sites honest.
-void requestArtwork(const char*) {}
-bool artworkPending(const char*) { return false; }
-bool takeArtworkFinished() { return false; }
-void clearArtwork() {}
-
-bool idleWork(Screen) { return false; }
 
 unsigned long lastInteractionMs() { return 0; }  // nobody can touch it
 

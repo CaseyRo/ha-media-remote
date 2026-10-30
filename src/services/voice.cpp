@@ -27,7 +27,19 @@
 
 #include "services/voice.h"
 
+// The headless build has no board.
+#if defined(BOARD_HEADER)
+#include "board/board.h"
+#endif
+
+#if defined(VOICE_ASSIST)
+
+#if !defined(BOARD_HAS_MIC)
+#error "VOICE_ASSIST is for a board with a microphone (BOARD_HAS_MIC)"
+#endif
+
 #include <Arduino.h>
+#include <Preferences.h>
 
 #include <atomic>
 #include <cctype>
@@ -44,6 +56,7 @@
 #include "hardware/audio.h"
 #include "log.h"
 #include "services/ha_client.h"
+#include "services/wake_word.h"
 #include "services/yielding_client.h"
 
 namespace services::voice {
@@ -53,6 +66,12 @@ using ha::detail::eachMember;
 using ha::detail::readJson;
 
 constexpr hw::audio::Reader kMic = hw::audio::Reader::kRequest;
+
+constexpr char kPrefsNamespace[] = "voice";
+constexpr char kPrefsEnabledKey[] = "enabled";
+
+/** The Voice setting, read in init(). */
+std::atomic<bool> s_enabled{config::kVoiceEnabledByDefault};
 
 constexpr char kRunBody[] =
     "\"type\":\"assist_pipeline/run\",\"start_stage\":\"stt\","
@@ -729,7 +748,17 @@ void voiceTask(void*) {
 }  // namespace
 
 void init() {
-  if (s_jobs != nullptr || !hw::audio::begin()) {
+  if (s_jobs != nullptr) {
+    return;
+  }
+  Preferences prefs;
+  if (prefs.begin(kPrefsNamespace, true)) {
+    s_enabled = prefs.getBool(kPrefsEnabledKey, config::kVoiceEnabledByDefault);
+    prefs.end();
+  }
+  // The audio starts either way: the screenless build's sounds are its, and
+  // the setting can be turned on again without a restart.
+  if (!hw::audio::begin()) {
     return;
   }
   hw::audio::setVolume(config::kVoiceVolume);
@@ -755,11 +784,31 @@ void init() {
   }
   ha::setStreamHook(hook);
   ha::setStreamListener(listener);
-  LOG_INFO("VOICE: ready");
+  LOG_INFO("VOICE: ready%s", s_enabled ? "" : ", but turned off");
+}
+
+bool enabled() {
+  return s_enabled;
+}
+
+void saveEnabled(bool on) {
+  s_enabled = on;
+  Preferences prefs;
+  if (prefs.begin(kPrefsNamespace, false)) {
+    prefs.putBool(kPrefsEnabledKey, on);
+    prefs.end();
+  }
+  if (!on) {
+    cancel();
+  }
+  // A no-op where the wake word never started.
+  wake_word::setListening(on);
+  LOG_INFO("VOICE: turned %s", on ? "on" : "off");
 }
 
 bool available() {
-  return s_jobs != nullptr && hw::audio::ready() && ha::streamIsOpen();
+  return s_enabled && s_jobs != nullptr && hw::audio::ready() &&
+         ha::streamIsOpen();
 }
 
 namespace {
@@ -857,3 +906,24 @@ void status(Status& out) {
 }
 
 }  // namespace services::voice
+
+#else  // a build without voice
+
+namespace services::voice {
+
+void init() {}
+bool enabled() { return false; }
+void saveEnabled(bool) {}
+bool available() { return false; }
+bool start() { return false; }
+bool startAt(uint32_t) { return false; }
+bool say(const char*) { return false; }
+void finish() {}
+void cancel() {}
+bool busy() { return false; }
+uint16_t level() { return 0; }
+void status(Status& out) { out = Status{}; }
+
+}  // namespace services::voice
+
+#endif  // VOICE_ASSIST

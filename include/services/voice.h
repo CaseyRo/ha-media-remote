@@ -16,8 +16,24 @@
  *
  * start() and the rest may be called from any task. The work happens on the
  * stream's owner and on a small task of this module's own.
+ *
+ * Two switches. A build has voice only if its env opts in, with
+ * -DVOICE_ASSIST in its build_flags, on a board with a microphone; without
+ * it, the audio, this and the wake word are stubs, and none of their code or
+ * the wake word's model is in the image. And a build that has it can be
+ * told not to use it -- the Voice setting, on the device and in the portal,
+ * stored with saveEnabled().
  */
 namespace services::voice {
+
+/** Whether this build has voice at all (-DVOICE_ASSIST). */
+constexpr bool built() {
+#if defined(VOICE_ASSIST)
+  return true;
+#else
+  return false;
+#endif
+}
 
 enum class Phase : uint8_t {
   kIdle,
@@ -43,11 +59,19 @@ struct Status {
 };
 
 /** Once, after services::ha::init(): starts the audio and hooks into the
- *  stream. Harmless on a board without a microphone. */
+ *  stream, and reads the Voice setting. Harmless in a build without voice. */
 void init();
 
-/** True when a request can be started now: there is a microphone, and the
- *  stream is open. */
+/** The Voice setting: whether requests may be made, and the wake word
+ *  listened for. On by default (config::kVoiceEnabledByDefault). Always
+ *  false in a build without voice. */
+bool enabled();
+/** Store the setting. Turned off, a request under way is dropped and the
+ *  wake word stops listening; turned on, it listens again. */
+void saveEnabled(bool on);
+
+/** True when a request can be started now: there is a microphone, the
+ *  Voice setting is on, and the stream is open. */
 bool available();
 
 /** Start a request: a beep, then listening. False when one is already

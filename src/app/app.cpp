@@ -1890,6 +1890,7 @@ enum class Setting : uint8_t {
   kWakeVolume,
   kAutoOff,
   kRecentHere,
+  kVoice,  // only in a build with voice
   kTxPower,
   kKeyboard,
   kRotation,
@@ -1897,7 +1898,7 @@ enum class Setting : uint8_t {
   kPortal,  // where the rest is set: a hint, and a tap does nothing
 };
 
-constexpr int kMaxSettingRows = 12;
+constexpr int kMaxSettingRows = 13;
 /** What each row of the page on screen is. Loop only, as is all of this. */
 Setting g_setting_rows[kMaxSettingRows];
 int g_setting_row_count = 0;
@@ -2022,6 +2023,10 @@ void showSettingsPage(int focus) {
     addSettingRow(Setting::kRecentHere, "Recent list",
                   services::browse::recentHere() ? "Room only"
                                                  : "Music Assistant");
+  }
+  if (services::voice::built()) {
+    addSettingRow(Setting::kVoice, "Voice",
+                  services::voice::enabled() ? "Enabled" : "Disabled");
   }
   formatTxPower(value, sizeof(value), wifiTxPower());
   addSettingRow(Setting::kTxPower, "Wi-Fi transmit power", value);
@@ -2171,6 +2176,14 @@ void openSettingChoices(Setting setting, int row) {
       addChoice("Music Assistant", 0, !room);
       break;
     }
+    case Setting::kVoice: {
+      ui::settingsBegin("Voice",
+                        "Listen for \"Hey Jarvis\", and answer through Assist");
+      const bool on = services::voice::enabled();
+      addChoice("Enabled", 1, on);
+      addChoice("Disabled", 0, !on);
+      break;
+    }
 
     case Setting::kTxPower: {
       ui::settingsBegin("Transmit power", "");
@@ -2285,6 +2298,12 @@ bool applySettingChoice(int row) {
     case Setting::kAutoOff:
       if ((value == 1) != services::ha::autoOffControl()) {
         services::ha::saveAutoOffControl(value == 1);
+        changed = true;
+      }
+      break;
+    case Setting::kVoice:
+      if ((value == 1) != services::voice::enabled()) {
+        services::voice::saveEnabled(value == 1);
         changed = true;
       }
       break;
@@ -3071,7 +3090,7 @@ void setup() {
   // Listening for the wake word from now on, on a board with a microphone
   // and the model; nothing elsewhere. Before Wi-Fi, for the same reason.
   if (services::wake_word::init()) {
-    services::wake_word::setListening(true);
+    services::wake_word::setListening(services::voice::enabled());
   }
   // Before Wi-Fi, so its pages are there when the portal's server starts.
   services::ha_link::init();

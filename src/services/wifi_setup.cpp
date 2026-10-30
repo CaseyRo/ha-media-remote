@@ -26,6 +26,7 @@
 #include "services/ha_link.h"
 #include "services/ma_api.h"
 #include "services/player_list.h"
+#include "services/voice.h"
 
 bool s_long_press_handled = false;
 
@@ -326,6 +327,25 @@ void buildRecentHereSelect() {
            "<option value=\"0\"%s>Music Assistant</option></select",
            room ? " selected" : "", room ? "" : " selected");
   s_param_recent_here.setValue(room ? "1" : "0", 2);
+}
+
+/** Voice: whether the remote listens for the wake word and takes requests.
+ *  The same dropdown as Auto-off's, and on the page only in a build with
+ *  voice. */
+char s_voice_attrs[320] = " type=\"hidden\"";
+WiFiManagerParameter s_param_voice(
+    "voice", "Voice: listen for \"Hey Jarvis\", and answer through Assist",
+    "1", 2, s_voice_attrs);
+
+void buildVoiceSelect() {
+  const bool on = services::voice::enabled();
+  snprintf(s_voice_attrs, sizeof(s_voice_attrs),
+           " type=\"hidden\"><select id=\"voice_sel\" "
+           "onchange='document.getElementById(\"voice\").value=this.value'>"
+           "<option value=\"1\"%s>Enabled</option>"
+           "<option value=\"0\"%s>Disabled</option></select",
+           on ? " selected" : "", on ? "" : " selected");
+  s_param_voice.setValue(on ? "1" : "0", 2);
 }
 
 void buildKeyboardSelect() {
@@ -788,6 +808,7 @@ void refreshPortalParamDefaults() {
   buildRotationSelect();
   buildKeyboardSelect();
   buildAutoOffSelect();
+  buildVoiceSelect();
   buildTxPowerSelect();
   snprintf(s_name_attrs, sizeof(s_name_attrs),
            " placeholder=\"%s\" autocapitalize=\"none\" spellcheck=\"false\"",
@@ -1061,6 +1082,13 @@ void onPortalParamsSaved() {
   }
   buildAutoOffSelect();  // the choice just saved, marked
 
+  const char* voice = submitted("voice") ? s_param_voice.getValue() : nullptr;
+  if (voice != nullptr && (voice[0] == '0' || voice[0] == '1') &&
+      voice[1] == '\0' && (voice[0] == '1') != services::voice::enabled()) {
+    services::voice::saveEnabled(voice[0] == '1');
+  }
+  buildVoiceSelect();  // the choice just saved, marked
+
   const char* txpow = submitted("txpow") ? s_param_txpow.getValue() : nullptr;
   if (txpow != nullptr && txpow[0] != '\0') {
     char* end = nullptr;
@@ -1139,6 +1167,9 @@ void attachPortalParams(WiFiManager& wm) {
   wm.addParameter(&s_param_rotation);
   wm.addParameter(&s_param_keyboard);
   wm.addParameter(&s_param_auto_off);
+  if (services::voice::built()) {
+    wm.addParameter(&s_param_voice);
+  }
   wm.setSaveParamsCallback(onPortalParamsSaved);
 }
 

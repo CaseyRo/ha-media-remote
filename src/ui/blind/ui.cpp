@@ -1,5 +1,9 @@
 #include "ui/ui.h"
 
+#if !defined(VOICE_ASSIST)
+#error "ui/blind is used by touch and by voice: its env needs -DVOICE_ASSIST"
+#endif
+
 #include <Arduino.h>
 
 #include <cmath>

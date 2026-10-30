@@ -16,9 +16,14 @@
  * Apache License 2.0), at commit 40ff33f5, embedded by platformio.ini on a
  * board with a microphone. Elsewhere its symbol is not there, and init()
  * says so.
+ *
+ * In a build without voice (-DVOICE_ASSIST, services/voice.h) this is the
+ * stubs at the end, and TensorFlow Lite Micro is not linked in at all.
  */
 
 #include "services/wake_word.h"
+
+#if defined(VOICE_ASSIST)
 
 #include <Arduino.h>
 
@@ -360,3 +365,18 @@ void takeStats(Stats& out) {
 }
 
 }  // namespace services::wake_word
+
+#else  // a build without voice
+
+namespace services::wake_word {
+
+bool init() { return false; }
+void setListening(bool) {}
+bool listening() { return false; }
+const char* phrase() { return ""; }
+bool takeDetection(uint32_t&) { return false; }
+void takeStats(Stats& out) { out = Stats{}; }
+
+}  // namespace services::wake_word
+
+#endif  // VOICE_ASSIST

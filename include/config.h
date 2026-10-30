@@ -537,6 +537,9 @@ constexpr uint16_t kVoiceReplyTimeoutMs = 15000;
 constexpr unsigned long kVoiceFetchMemoryWaitMs = 1000;
 /** How loud the speaker is, 0..100. */
 constexpr int kVoiceVolume = 70;
+/** The Voice setting on a remote that has never stored one, in a build with
+ *  voice: on, since the build opted in to it. */
+constexpr bool kVoiceEnabledByDefault = true;
 /** While a voice request runs, music playing in the room is turned down to
  *  this share of its volume, about 12 dB, so the command is heard over it --
  *  and back up once the request and its reply are over. Not paused: a pause

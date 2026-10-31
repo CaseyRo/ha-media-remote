@@ -12,6 +12,10 @@ GitHub release from that version's section, with
 
 ## [Unreleased]
 
+### Added
+
+- **Waveshare ESP32-S3-Touch-AMOLED-1.75C**, built as `amoled466c-s3`: the 1.75's build with the 1.75C's display and touch resets, on GPIO 1 and 2. Not yet tried on a board, and not on the install page.
+
 ## [1.4.0] - 2026-10-30
 
 This release adds three boards -- the Guition ESP32-4848S040, the Waveshare AMOLED 1.75 and the Waveshare ESP32-P4 4B, the first on an ESP32-P4 -- and shows how far through the track it is, in the album art's colour, with a drag along the line to seek. The search finds albums, tracks, playlists and radio as well as artists, an artist on the swipe-up list starts their radio, and the screen no longer stops while Home Assistant answers a button.

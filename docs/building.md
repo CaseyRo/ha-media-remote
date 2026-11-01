@@ -27,6 +27,7 @@ pio run -e lcd28c-s3         # 2.8" round 480x480
 pio run -e matouch21-s3      # 2.1" round 480x480
 pio run -e guition4848-s3    # 4" square 480x480
 pio run -e lcd4b-p4          # 4" square 720x720, ESP32-P4
+pio run -e amoled466-blind   # AMOLED 1.75, no picture: touch and voice
 pio run -e headless          # no panel
 ```
 
@@ -37,7 +38,8 @@ Each board's build embeds only the fonts it uses and compiles only its own
 **Voice** -- the wake word, Assist requests and spoken replies -- is built
 only into an env that opts in with `-DVOICE_ASSIST` in its `build_flags`,
 on a board with a microphone (`BOARD_HAS_MIC`; anything else stops the build
-with an error). `amoled466-s3`, `amoled466-blind` and `lcd4b-p4` opt in, and
+with an error). `amoled466-s3` (and `amoled466c-s3`, which extends it), `amoled466-blind`
+and `lcd4b-p4` opt in, and
 `amoled466-blind`, which is worked by touch and by voice, will not build
 without it. Leave the flag out and the audio, the voice requests and the
 wake word are stubs: none of their code, TensorFlow Lite Micro or the wake

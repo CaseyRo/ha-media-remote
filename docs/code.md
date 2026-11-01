@@ -14,6 +14,8 @@ src/
     round/       theme.cpp, now_playing.cpp   <- the round panels
     square/      theme.cpp, now_playing.cpp   <- the Qualia
     headless/    draws nothing, narrates to serial
+    blind/       no picture: touch and voice, for amoled466-blind
+    console/     the narration headless/ and blind/ share
   hardware/
     waveshare/  round360/  amoled466/  qualia/  lcd28c/  matouch21/
     guition4848/  lcd4b/  headless/    <- one per board
@@ -79,6 +81,9 @@ src/services/
   ma_api.cpp               Music Assistant's own API, and its settings
   display_settings.cpp     rotation and keyboard layout
   device_name.cpp          hostname and mDNS
+  voice.cpp                Assist requests and spoken replies, the Voice
+                           setting (builds with -DVOICE_ASSIST)
+  wake_word.cpp            "Hey Jarvis", on TensorFlow Lite Micro
 src/ui/round/, src/ui/square/
   theme.cpp                chordHalfWidth(): the panel's shape
   now_playing.cpp          the main screen: volume arc or bar, transport
@@ -102,6 +107,9 @@ src/hardware/
   touch_gestures.cpp       press tracking, tap / swipe, the touch queue
   encoder.cpp              the knob, on a board with one
   display_font.cpp         picks the embedded face for a height
+  audio.cpp                microphone and speaker streams, for voice
+  es8311_es7210.cpp        the codec and microphone ADC
+  i2c_bus.cpp              the shared I2C bus
   korean_font.cpp          Korean behind each face, from an outline font
   <board>/display.cpp      panel bring-up, backlight, sleep, rotation
   <board>/touch_raw.cpp    reads the touch controller
@@ -140,6 +148,7 @@ site/                        the install page and its board manifests
 | Network task (`haPollTask`) | Owns the state stream, or polls without it; history, list loads, picture lookups |
 | Artwork worker (`thumbs`, core 0) | The now-playing cover first, then list thumbnails |
 | Recommendations (`recommend`, stack in PSRAM) | Builds the recommendation pool from Music Assistant's API |
+| Voice (`voice`, `wake`, `audio_in`, `audio_out`; builds with `-DVOICE_ASSIST`) | The wake word, Assist requests, the microphone and the speaker |
 | Touch sampler (Qualia, 2.8C, MaTouch, 4848S040, P4 4B) | Reads the touch controller into a queue of timestamped changes |
 
 They share three kinds of thing, each with its own discipline:

@@ -659,7 +659,11 @@ remote that has never stored one is `config::kTurnOffControlOnBlank`.
 
 **Voice** *(only in a build with voice)* -- *Enabled*, the default, listens
 for "Hey Jarvis" and answers voice requests through Home Assistant's Assist;
-*Disabled* stops listening and takes no requests. The microphone and the
+*Disabled* stops listening and takes no requests. A request that fails says
+so: "Sorry, I didn't catch that" when nothing was heard, "Sorry, Home
+Assistant couldn't answer that" when anything else went wrong -- the
+conversation agent erred, say -- and two low falling notes when Home
+Assistant could not be reached to speak either. The microphone and the
 speaker stay set up either way, so turning it back on needs no restart. The
 default for a remote that has never stored one is
 `config::kVoiceEnabledByDefault`.

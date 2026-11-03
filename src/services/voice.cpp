@@ -85,6 +85,11 @@ constexpr unsigned long kStartTimeoutMs = 5000;
 /** The beep that says it is listening. */
 constexpr uint16_t kBeepHz = 880;
 constexpr uint16_t kBeepMs = 120;
+/** Said after a request that failed: nothing was heard in it, or anything
+ *  else went wrong -- the conversation agent erred, say. An answer that is
+ *  itself an apology, an intent not matched, is Home Assistant's own. */
+constexpr char kSorryNotHeard[] = "Sorry, I didn't catch that.";
+constexpr char kSorryFailed[] = "Sorry, Home Assistant couldn't answer that.";
 
 struct Job {
   enum Kind : uint8_t { kListen, kFetch } kind;
@@ -114,6 +119,9 @@ std::atomic<bool> s_fetching{false};
  *  Home Assistant will never make its speech, and the download stops
  *  waiting for it. Cleared as a download is queued. */
 std::atomic<bool> s_fetch_abort{false};
+/** An apology owed for a request that failed, said by the owner once that
+ *  request's run is over; nullptr when none is. */
+std::atomic<const char*> s_sorry{nullptr};
 
 /** The texts, for status(); under s_lock. */
 Status s_status;
@@ -148,12 +156,21 @@ void setText(char (Status::*field)[N], const char* text) {
   taskEXIT_CRITICAL(&s_lock);
 }
 
-void fail(const char* why) {
+/** The request has failed, for `why`. Out loud too: `sorry` is said once
+ *  its run is over, or with nullptr -- the stream gone or not answering,
+ *  so Home Assistant cannot be asked to say anything -- a tone at once.
+ *  say()'s own failures, an apology's among them, are the tone. */
+void fail(const char* why, const char* sorry) {
   hw::audio::captureStop(kMic);
   s_fetch_abort = true;
   setText(&Status::error, why);
   s_phase = Phase::kFailed;
   LOG_WARN("VOICE: %s", why);
+  if (sorry != nullptr && !s_say_only) {
+    s_sorry = sorry;
+  } else {
+    hw::audio::cue(hw::audio::Cue::kFailed);
+  }
 }
 
 /** The microphone, as much as there is, out in whole messages; the last,
@@ -241,6 +258,15 @@ void hook() {
     }
     return;
   }
+  // An apology owed, once the request it is for is over and its reply, if
+  // it got as far as one, has been dropped. say() is the next request.
+  if (s_sorry != nullptr && s_run_id == 0 && !s_want_run && !s_fetching &&
+      !hw::audio::playing()) {
+    const char* sorry = s_sorry.exchange(nullptr);
+    if (sorry != nullptr && !say(sorry)) {
+      hw::audio::cue(hw::audio::Cue::kFailed);
+    }
+  }
   if (s_want_run.exchange(false)) {
     s_handler = -1;
     s_audio_done = false;
@@ -254,7 +280,7 @@ void hook() {
     s_run_sent_ms = millis();
     s_run_id = ha::streamRequest(s_run_body.c_str());
     if (s_run_id == 0) {
-      fail("could not reach Home Assistant");
+      fail("could not reach Home Assistant", nullptr);
     }
     return;
   }
@@ -266,7 +292,7 @@ void hook() {
   const unsigned long now = millis();
   if (!s_run_started && now - s_run_sent_ms >= kStartTimeoutMs) {
     s_run_id = 0;
-    fail("Home Assistant did not start the request");
+    fail("Home Assistant did not start the request", nullptr);
     return;
   }
   if (s_phase == Phase::kListening && hw::audio::capturing(kMic) &&
@@ -319,7 +345,7 @@ void listener(const char* message) {
     const Phase p = s_phase;
     if (s_run_id != 0 || p == Phase::kStarting) {
       s_run_id = 0;
-      fail("lost the connection to Home Assistant");
+      fail("lost the connection to Home Assistant", nullptr);
     }
     return;
   }
@@ -345,7 +371,8 @@ void listener(const char* message) {
         s_end_on_start = false;  // refused, and already given up: no matter
         return;
       }
-      fail(why[0] != '\0' ? why : "Home Assistant refused the request");
+      fail(why[0] != '\0' ? why : "Home Assistant refused the request",
+           kSorryFailed);
     }
     return;
   }
@@ -405,7 +432,7 @@ void listener(const char* message) {
     s_frame[0] = static_cast<uint8_t>(s_handler);
     if (s_handler < 0) {
       s_run_id = 0;
-      fail("Home Assistant gave no audio channel");
+      fail("Home Assistant gave no audio channel", kSorryFailed);
     }
   } else if (strcmp(etype, "stt-vad-end") == 0) {
     hw::audio::captureStop(kMic);  // it has stopped listening
@@ -435,7 +462,9 @@ void listener(const char* message) {
     readPath(data, kCode, code, sizeof(code));
     readPath(data, kMessage, why, sizeof(why));
     LOG_WARN("VOICE: Home Assistant said %s", code);
-    fail(why[0] != '\0' ? why : code);
+    fail(why[0] != '\0' ? why : code,
+         strcmp(code, "stt-no-text-recognized") == 0 ? kSorryNotHeard
+                                                     : kSorryFailed);
   } else if (strcmp(etype, "run-end") == 0) {
     s_run_ended = true;
   }
@@ -838,6 +867,7 @@ bool begin(const String& body, bool say_only, const Job* job) {
   taskENTER_CRITICAL(&s_lock);
   s_status = Status();
   taskEXIT_CRITICAL(&s_lock);
+  s_sorry = nullptr;  // asked again: the new request is the answer
   s_capture_began = false;
   s_run_body = body;
   s_say_only = say_only;
@@ -882,6 +912,7 @@ void finish() {
 
 void cancel() {
   hw::audio::captureStop(kMic);
+  s_sorry = nullptr;
   s_fetch_abort = true;
   hw::audio::stop();
   s_want_cancel = true;
@@ -891,7 +922,8 @@ void cancel() {
 
 bool busy() {
   const Phase p = s_phase;
-  return (p != Phase::kIdle && p != Phase::kFailed) || s_fetching;
+  return (p != Phase::kIdle && p != Phase::kFailed) || s_fetching ||
+         s_sorry != nullptr;
 }
 
 uint16_t level() {

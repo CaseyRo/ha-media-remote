@@ -12,6 +12,10 @@ GitHub release from that version's section, with
 
 ## [Unreleased]
 
+### Added
+
+- **A voice request that fails says so,** where before it went quiet after the beep: "Sorry, I didn't catch that" when Home Assistant heard nothing, "Sorry, Home Assistant couldn't answer that" for any other failure -- an error from the conversation agent, say -- in the pipeline's voice, and two low falling notes when Home Assistant cannot be reached to speak either.
+
 ## [1.5.0] - 2026-11-03
 
 This release shows Korean -- artist names and track titles in Hangul, drawn from an outline font at the size of the text around them -- and the letters and symbols a dozen more Latin-script languages need, and adds the Waveshare AMOLED 1.75C, built and on the install page though not yet tried on a board. The list's top section can be Music Assistant's recent artists, which every player shares, the portal can forget the Home Assistant token, and a swipe down from the top edge of a round panel no longer switches the volume device on.

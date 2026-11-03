@@ -99,6 +99,8 @@ void showRestarting(const char* why) { say("restarting: %s", why); }
 void showSearchResults() { say("search results"); }
 void showSearching() { say("searching..."); }
 void showVoiceStarting(const char* words) { say("starting %s", words); }
+void showToast(const char* text, uint32_t) { say("toast: %s", text); }
+bool toastExpired() { return false; }
 void showLoadingList() { say("loading library"); }
 void showLoading(const char* what) { say("loading %s", what); }
 

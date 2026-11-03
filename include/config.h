@@ -542,6 +542,8 @@ constexpr int kVoiceVolume = 70;
 /** The Voice setting on a remote that has never stored one, in a build with
  *  voice: on, since the build opted in to it. */
 constexpr bool kVoiceEnabledByDefault = true;
+/** How long the words a voice request heard stay over now playing. */
+constexpr uint32_t kVoiceToastMs = 4000;
 /** How far "volume up" and "volume down", said to the remote, move the
  *  volume device, as a share of its whole range. */
 constexpr float kVoiceVolumeStep = 0.1f;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+
 #include "config.h"
 
 /**
@@ -30,6 +32,12 @@ namespace logging {
  *  below config::kLogLevel. From any task. */
 void write(config::LogLevel level, const char* fmt, ...)
     __attribute__((format(printf, 2, 3)));
+
+/** In a build with -DNET_LOG, the log is also kept, its last kNetLogBytes,
+ *  in PSRAM, for the portal's /log page: whole lines into `out`, oldest
+ *  first, NUL-terminated. Returns the length; 0 without -DNET_LOG. */
+constexpr size_t kNetLogBytes = 64 * 1024;
+size_t recent(char* out, size_t out_len);
 
 /** Whether `level` is compiled in, for work done only to feed a log line. */
 constexpr bool enabled(config::LogLevel level) {

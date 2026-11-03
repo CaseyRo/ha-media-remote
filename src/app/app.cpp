@@ -27,6 +27,9 @@
 #include <freertos/queue.h>
 #include <freertos/semphr.h>
 #include <freertos/task.h>
+#if defined(NET_LOG)
+#include <WebServer.h>
+#endif
 
 #include "app/app.h"
 #include "config.h"
@@ -1691,6 +1694,47 @@ void restoreAfterVoice() {
   g_state_dirty = true;
 }
 
+#if defined(NET_LOG)
+/** /log: the log's last lines, for a remote whose USB port cannot be got
+ *  at. A diagnostic build's only (-DNET_LOG). */
+void handleLogPage(WebServer& server) {
+  char* text = static_cast<char*>(heap_caps_malloc(
+      logging::kNetLogBytes + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (text == nullptr) {
+    server.send(503, "text/plain", "no memory for the log\n");
+    return;
+  }
+  const size_t n = logging::recent(text, logging::kNetLogBytes + 1);
+  server.setContentLength(n);
+  server.send(200, "text/plain; charset=utf-8", "");
+  server.sendContent(text, n);
+  free(text);
+}
+
+/** The wake word's scores, every ten seconds, so a log shows how near it
+ *  came: its best smoothed score against the cutoff, and whether it kept
+ *  up. A diagnostic build's only. */
+void logWakeStats() {
+  static unsigned long last = 0;
+  if (!services::voice::built() || millis() - last < 10000) {
+    return;
+  }
+  last = millis();
+  services::wake_word::Stats s;
+  services::wake_word::takeStats(s);
+  LOG_INFO("WAKE: %s, %lu runs, %lu us mean, %lu us most, best %u of %u, "
+           "%lu heard, %lu samples dropped",
+           services::wake_word::listening() ? "listening" : "NOT listening",
+           static_cast<unsigned long>(s.runs),
+           static_cast<unsigned long>(s.mean_us),
+           static_cast<unsigned long>(s.max_us),
+           static_cast<unsigned>(s.max_score),
+           static_cast<unsigned>(config::kWakeWordCutoff),
+           static_cast<unsigned long>(s.detections),
+           static_cast<unsigned long>(s.dropped));
+}
+#endif
+
 /** The wake word, heard: a voice request from where it ended. */
 [[gnu::noinline]] void handleWakeWord() {
   uint32_t position = 0;
@@ -3094,6 +3138,10 @@ void setup() {
   }
   // Before Wi-Fi, so its pages are there when the portal's server starts.
   services::ha_link::init();
+#if defined(NET_LOG)
+  // A diagnostic build's log, over the network.
+  wifiAddWebPage("/log", handleLogPage);
+#endif
   // After ha::init(): an unset Music Assistant address is derived from Home
   // Assistant's. The recommendations wait for Wi-Fi on their own task.
   services::ma::init();
@@ -3159,6 +3207,9 @@ void loop() {
   handleMessageRecheck();
   handleHaLink();
   handleWakeWord();
+#if defined(NET_LOG)
+  logWakeStats();
+#endif
 
   // Before the artwork, and that ordering is the whole point. What is playing
   // is why the device exists; browse thumbnails are a preload for a list

@@ -542,6 +542,9 @@ constexpr int kVoiceVolume = 70;
 /** The Voice setting on a remote that has never stored one, in a build with
  *  voice: on, since the build opted in to it. */
 constexpr bool kVoiceEnabledByDefault = true;
+/** How far "volume up" and "volume down", said to the remote, move the
+ *  volume device, as a share of its whole range. */
+constexpr float kVoiceVolumeStep = 0.1f;
 /** While a voice request runs, music playing in the room is turned down to
  *  this share of its volume, about 12 dB, so the command is heard over it --
  *  and back up once the request and its reply are over. Not paused: a pause

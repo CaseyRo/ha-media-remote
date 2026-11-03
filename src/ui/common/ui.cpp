@@ -1176,6 +1176,7 @@ void showSearch() {
 void showSearchResults() { search::draw(); }
 
 void showSearching() { search::showSearching(); }
+void showVoiceStarting(const char* words) { search::showStartingWords(words); }
 
 void showLoading(const char* what) {
   statusScreenMessage("Loading", what, "", theme::kStatusPlain,

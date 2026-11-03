@@ -1921,6 +1921,11 @@ void logWakeStats() {
     LOG_INFO("VOICE: wake word heard, but no request can start now");
     return;
   }
+  // Someone is here, as for a tap on a dark panel: lit, and the idle clock
+  // started again, so what the request does -- the Starting... card, play
+  // paused, the volume moved -- is there to see.
+  wakeDisplay();
+  noteTouchWake();
   duckForVoice();
 }
 

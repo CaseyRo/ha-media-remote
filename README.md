@@ -668,7 +668,10 @@ Assistant could not be reached to speak either.
 Where two remotes hear the same "Hey Jarvis", one answers: Home Assistant
 gives a wake word to the first request to reach it and turns the other away,
 and the remote that heard it louder -- the nearer one -- asks sooner
-(`config::kVoiceWakeHoldMsPerDb`). "Hey Jarvis" lights a dark screen, as a
+(`config::kVoiceWakeHoldMsPerDb`). A request ends when Home Assistant hears
+the speech stop, or when the remote does (`config::kVoiceEndQuietMs` quiet
+after speech well above the room's level), whichever is first -- a word as
+short as "stop" can be too short for Home Assistant's detector. "Hey Jarvis" lights a dark screen, as a
 tap does, so what a request does can be seen, and the words it heard show at the top of now playing for a
 few seconds (`config::kVoiceToastMs`). A few requests are this remote's own, for its player, when they name no
 player: "play", "pause", "skip" (or "next"), "previous", "volume up" and

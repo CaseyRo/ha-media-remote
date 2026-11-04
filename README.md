@@ -665,8 +665,11 @@ Assistant couldn't answer that" when anything else went wrong -- the
 conversation agent erred, say -- and two low falling notes when Home
 Assistant could not be reached to speak either.
 
-"Hey Jarvis" lights a dark screen, as a tap does, so what a request does
-can be seen, and the words it heard show at the top of now playing for a
+Where two remotes hear the same "Hey Jarvis", one answers: Home Assistant
+gives a wake word to the first request to reach it and turns the other away,
+and the remote that heard it louder -- the nearer one -- asks sooner
+(`config::kVoiceWakeHoldMsPerDb`). "Hey Jarvis" lights a dark screen, as a
+tap does, so what a request does can be seen, and the words it heard show at the top of now playing for a
 few seconds (`config::kVoiceToastMs`). A few requests are this remote's own, for its player, when they name no
 player: "play", "pause", "skip" (or "next"), "previous", "volume up" and
 "volume down" (or "louder", "quieter", "turn it up"...) do what the buttons

@@ -25,6 +25,12 @@ constexpr uint8_t kRegStatus2 = 0x01;
 constexpr uint8_t kRegGaugeCtrl = 0x18;
 constexpr uint8_t kGaugeOn = 0x08;
 constexpr uint8_t kRegPercent = 0xA4;
+/** Bit 3 of each: the PWR key pressed briefly. Enabled, it is latched in the
+ *  status register until written back. */
+constexpr uint8_t kRegIrqEnable2 = 0x41;
+constexpr uint8_t kRegIrqStatus2 = 0x49;
+constexpr uint8_t kPowerKeyShort = 0x08;
+constexpr unsigned long kPowerKeyPollMs = 100;
 
 bool s_ready = false;
 
@@ -61,6 +67,12 @@ bool batteryInit() {
       !writeReg(kRegGaugeCtrl, static_cast<uint8_t>(gauge | kGaugeOn))) {
     LOG_WARN("Battery: could not turn the fuel gauge on");
   }
+  // Arm the PWR key's short press, and drop one left over from before boot.
+  const int irq = readReg(kRegIrqEnable2);
+  if (irq >= 0 && (irq & kPowerKeyShort) == 0) {
+    writeReg(kRegIrqEnable2, static_cast<uint8_t>(irq | kPowerKeyShort));
+  }
+  writeReg(kRegIrqStatus2, kPowerKeyShort);
   s_ready = true;
   const int pct = batteryPercent();
   if (pct < 0) {
@@ -88,6 +100,20 @@ bool batteryCharging() {
   return status >= 0 && (status >> 5 & 0x03) == 0x01;
 }
 
+bool powerKeyTakePress() {
+  static unsigned long s_polled_ms = 0;
+  if (!s_ready || millis() - s_polled_ms < kPowerKeyPollMs) {
+    return false;
+  }
+  s_polled_ms = millis();
+  const int status = readReg(kRegIrqStatus2);
+  if (status < 0 || (status & kPowerKeyShort) == 0) {
+    return false;
+  }
+  writeReg(kRegIrqStatus2, kPowerKeyShort);  // written back to clear
+  return true;
+}
+
 }  // namespace hw
 
 #else  // no power manager on this board
@@ -97,6 +123,7 @@ namespace hw {
 bool batteryInit() { return false; }
 int batteryPercent() { return -1; }
 bool batteryCharging() { return false; }
+bool powerKeyTakePress() { return false; }
 
 }  // namespace hw
 

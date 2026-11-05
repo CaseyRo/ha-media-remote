@@ -76,6 +76,14 @@ void displayWake() {
 
 bool displayIsBlanked() { return s_blanked; }
 
+void displaySetDimmed(bool dimmed) {
+  if (s_blanked) {
+    return;
+  }
+  tft.setBrightness(dimmed ? board::kDisplayDimBrightness
+                           : board::kDisplayBrightness);
+}
+
 uint8_t displayRotation() { return s_rotation; }
 
 bool displayRotatesItself() { return false; }

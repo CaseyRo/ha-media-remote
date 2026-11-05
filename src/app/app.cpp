@@ -96,6 +96,9 @@ unsigned long g_np_since_ms = 0;
 /** The minute the clock face last drew, so the next one draws again. Loop
  *  only. */
 long g_dim_minute = -1;
+/** The PWR key put the screen to sleep: only a touch or PWR again wakes it,
+ *  not playback, as it would after the idle blank. Loop only. */
+bool g_asleep = false;
 
 /** A volume gesture is in progress somewhere on the panel, so a poll must not
  *  contradict it. The display owns the gesture; this is a copy of
@@ -450,7 +453,7 @@ bool playerIsIdle(const PlayerState& state) {
  *  across a sleep, so the screen has to be composed again rather than assumed
  *  to still be there. */
 void wakeDisplay() {
-  if (!ui::isBlanked()) {
+  if (g_asleep || !ui::isBlanked()) {
     return;
   }
   ui::wake();
@@ -465,6 +468,7 @@ void wakeDisplay() {
  *  powerOnControl()) -- but a power-off the blanking asked for and the poll
  *  task has not yet sent is called off, since someone is here after all. */
 void noteTouchWake() {
+  g_asleep = false;
   g_idle_since = 0;
   g_np_since_ms = millis();
   g_control_off_sent = false;
@@ -888,14 +892,16 @@ void startCommands() {
     g_idle_since = millis();
     return;
   }
-  if (ui::isBlanked() ||
-      millis() - g_idle_since < config::kIdleTimeoutMs) {
+  if (millis() - g_idle_since < config::kIdleTimeoutMs) {
     return;
   }
 
-  ui::blank();
+  if (!ui::isBlanked()) {
+    ui::blank();
+  }
 
-  // The amplifier goes with the screen. Getting here at all means the player
+  // The amplifier goes with the screen -- or after it, when PWR put the
+  // screen to sleep first. Getting here at all means the player
   // has been paused, idle, off or unavailable for the whole timeout, since
   // anything else would have woken the panel several branches ago.
   if (services::ha::autoOffControl() && !g_control_off_sent) {
@@ -2478,6 +2484,18 @@ void portalIdle() {
 
     case Intent::kWokeFromTouch:
       noteTouchWake();
+      break;
+
+    case Intent::kSleep:
+      // On now playing, so it wakes to it. The music and the amplifier are
+      // left as they are; the idle stand-down still switches the amplifier
+      // off once the player has been paused for kIdleTimeoutMs.
+      if (g_screen != Screen::kNowPlaying) {
+        showNowPlaying();
+      }
+      ui::blank();
+      g_asleep = true;
+      LOG_INFO("UI: asleep (PWR)");
       break;
 
     case Intent::kPrevious:

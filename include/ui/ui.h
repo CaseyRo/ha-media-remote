@@ -67,6 +67,7 @@ enum class Intent : uint8_t {
   kPlaySearchResult,  // `index` is a result
   kCancelStart,       // back from the Starting... card: stop waiting for it
   kWokeFromTouch,     // a tap landed on a blanked panel and only woke it
+  kSleep,             // the PWR key: the screen off until a touch or PWR
   kOpenStatus,
   kTapCard,           // a tap on a status card, which the app may act on
   kOpenWifi,          // the network list, a swipe left from the status page

@@ -917,6 +917,16 @@ bool init(uint8_t rotation) {
 namespace {
 /** The clock face is up in place of now playing: see dim(). */
 bool s_dimmed = false;
+
+/** The panel's own brightness down while the clock face is up, on a panel
+ *  that has one; elsewhere the face's dim pixels are all the dimming. */
+void dimPanel(bool dimmed) {
+#if defined(BOARD_PANEL_AMOLED)
+  displaySetDimmed(dimmed);
+#else
+  (void)dimmed;
+#endif
+}
 }  // namespace
 
 Input poll(Screen screen, const PlayerState* state) {
@@ -928,6 +938,18 @@ Input poll(Screen screen, const PlayerState* state) {
   // other screen is enough to know the card has gone.
   if (screen != Screen::kMessage) {
     statusScreenForgetCard();
+  }
+
+  // The PWR key, on a board whose power manager reports it: a press puts
+  // the screen to sleep, or wakes it again, and does nothing else.
+  if (hw::powerKeyTakePress()) {
+    if (displayIsBlanked()) {
+      wake();
+      out.intent = Intent::kWokeFromTouch;
+    } else {
+      out.intent = Intent::kSleep;
+    }
+    return out;
   }
 
   // A touch on a blanked panel, or on the clock face, only wakes it. Handled
@@ -944,6 +966,7 @@ Input poll(Screen screen, const PlayerState* state) {
     if (turned || pressed || hw::touchIsDown() || hw::touchPoll(discard)) {
       if (s_dimmed) {
         s_dimmed = false;
+        dimPanel(false);
         hw::touchCancel();
       } else {
         wake();
@@ -1286,6 +1309,9 @@ bool dim(const PlayerState* state) {
   if (!clock_face::now(local)) {
     return false;
   }
+  if (!s_dimmed) {
+    dimPanel(true);
+  }
   clock_face::draw(state, local);
   s_dimmed = true;
   return true;
@@ -1293,7 +1319,12 @@ bool dim(const PlayerState* state) {
 
 bool isDimmed() { return s_dimmed; }
 
-void undim() { s_dimmed = false; }
+void undim() {
+  if (s_dimmed) {
+    dimPanel(false);
+  }
+  s_dimmed = false;
+}
 
 // --- Artwork ---------------------------------------------------------------
 

@@ -340,7 +340,14 @@ After **15 seconds** untouched (`kDimAfterMs`), now playing rests as a
 it, on black. A touch brings now playing back and does nothing else. The
 time comes from SNTP once Wi-Fi is up, in the zone `kTimeZone` names; until
 it has answered, the screen does not dim. The blanking below follows the
-same timer as before, from the clock as from now playing.
+same timer as before, from the clock as from now playing. On the AMOLED the
+panel's own brightness steps down while the clock is up.
+
+On the AMOLED 1.75 and 1.75C, a short press of **PWR** puts the screen to
+sleep, and a touch or another press wakes it. It is only the screen: the
+music plays on, playback starting elsewhere does not light it, and the
+volume device is switched off as below once the player has been paused for
+five minutes. Holding PWR still switches the board off.
 
 After **five minutes** with the player paused, idle, off or unavailable
 (`kIdleTimeoutMs`, `kBlankWhenPaused`), the screen blanks -- backlight off,

@@ -15,6 +15,8 @@ GitHub release from that version's section, with
 ### Added
 
 - **Battery on the status page**, on the AMOLED 1.75 and 1.75C: the charge in percent from the AXP2101's fuel gauge, with *charging* while it charges, between the address and the uptime. The gauge is turned on at boot if it is off; the first reading is logged. Boards without a power manager show no line.
+- **A dimmed clock face**: after 15 seconds untouched (`kDimAfterMs`), now playing rests as the time, large and dim, with the title and artist under it, on black -- mostly unlit pixels on an AMOLED. A touch only brings now playing back. The time comes from SNTP (`pool.ntp.org`) once Wi-Fi is up, in the zone `kTimeZone` names; until it answers, nothing dims. The face wanders a few pixels a minute so the same pixels are not lit all day. On the AMOLED boards it has digits of its own, `clock_font_101.vlw`, and the loop task a 16 KB stack to draw them; elsewhere the largest face is scaled. Blanking after `kIdleTimeoutMs` is unchanged.
+- **`build_ui_font.py --chars` and `--prefix`**: a face of only the characters given, under its own file name, as the clock's digits are.
 
 ## [1.5.0] - 2026-11-03
 

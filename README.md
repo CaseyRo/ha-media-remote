@@ -336,8 +336,8 @@ itself within a couple of seconds.
 ### Blanking, and the amplifier
 
 After **15 seconds** untouched (`kDimAfterMs`), now playing rests as a
-**dimmed clock**: the time, large and dim, with the title and artist under
-it, on black. A touch brings now playing back and does nothing else. The
+**dimmed clock**: the time, large and dim, with the title under it on up to
+two lines and the artist on its own, on black. A touch brings now playing back and does nothing else. The
 time comes from SNTP once Wi-Fi is up, in the zone `kTimeZone` names; until
 it has answered, the screen does not dim. The blanking below follows the
 same timer as before, from the clock as from now playing. On the AMOLED the

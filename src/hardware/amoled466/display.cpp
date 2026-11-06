@@ -33,6 +33,27 @@ int evenUp(int v) {
   return v < kSide ? v : kSide;
 }
 
+/** The brightness last sent, for a fade to start from. */
+uint8_t s_level = 0;
+/** Woken and still dark: fade up once a whole frame is in (see
+ *  displayPresentFrame), or kFadeInFallbackMs on, whatever has come. */
+bool s_fade_in = false;
+unsigned long s_woken_ms = 0;
+constexpr unsigned long kFadeInFallbackMs = 500;
+
+/** Step the panel's brightness to `to` over about 150 ms. It is one command
+ *  to the controller, so a fade is a handful of them and redraws nothing --
+ *  going straight from lit to dark, or dark to lit, looked abrupt. */
+void fadeTo(uint8_t to) {
+  constexpr int kSteps = 8;
+  constexpr unsigned long kStepMs = 18;
+  const int from = s_level;
+  for (int i = 1; i <= kSteps; ++i) {
+    tft.setBrightness(static_cast<uint8_t>(from + (to - from) * i / kSteps));
+    delay(kStepMs);
+  }
+  s_level = to;
+}
 }  // namespace
 
 void displayInit(uint8_t rotation) {
@@ -47,6 +68,7 @@ void displayInit(uint8_t rotation) {
   tft.setRotation(0);
   tft.fillScreen(config::kColorBlack);
   tft.setBrightness(board::kDisplayBrightness);
+  s_level = board::kDisplayBrightness;
   tft.setTextWrap(false);
   displayFontInit();
 }
@@ -55,10 +77,11 @@ void displayBlank() {
   if (s_blanked) {
     return;
   }
-  // An AMOLED lights only what it shows, so black is already most of the
-  // saving; brightness 0 and sleep are the rest.
+  // Faded down, then black and asleep. An AMOLED lights only what it shows,
+  // so black is already most of the saving; brightness 0 and sleep are the
+  // rest.
+  fadeTo(0);
   tft.fillScreen(config::kColorBlack);
-  tft.setBrightness(0);
   tft.sleep();
   s_blanked = true;
   LOG_INFO("Display: blanked (player idle)");
@@ -69,7 +92,12 @@ void displayWake() {
     return;
   }
   tft.wakeup();
-  tft.setBrightness(board::kDisplayBrightness);
+  // Dark until the first whole frame is in: the panel's RAM is not to be
+  // trusted across a sleep, and lighting it at once showed what it kept.
+  tft.setBrightness(0);
+  s_level = 0;
+  s_fade_in = true;
+  s_woken_ms = millis();
   s_blanked = false;
   LOG_INFO("Display: woken");
 }
@@ -77,18 +105,19 @@ void displayWake() {
 bool displayIsBlanked() { return s_blanked; }
 
 void displaySetDimmed(bool dimmed) {
-  if (s_blanked) {
+  if (s_blanked || s_fade_in) {
     return;
   }
-  tft.setBrightness(dimmed ? board::kDisplayDimBrightness
-                           : board::kDisplayBrightness);
+  fadeTo(dimmed ? board::kDisplayDimBrightness : board::kDisplayBrightness);
 }
 
 uint8_t displayRotation() { return s_rotation; }
 
 bool displayRotatesItself() { return false; }
 
-void displayPresentFrame(const uint16_t* frame, int x, int y, int w, int h) {
+namespace {
+
+void pushFrame(const uint16_t* frame, int x, int y, int w, int h) {
   if (frame == nullptr || w <= 0 || h <= 0) {
     return;
   }
@@ -173,6 +202,17 @@ void displayPresentFrame(const uint16_t* frame, int x, int y, int w, int h) {
     tft.pushImage(x0, gy, gw, 2, s_rows);
   }
   tft.endWrite();
+}
+
+}  // namespace
+
+void displayPresentFrame(const uint16_t* frame, int x, int y, int w, int h) {
+  pushFrame(frame, x, y, w, h);
+  if (s_fade_in && ((w >= kSide && h >= kSide) ||
+                    millis() - s_woken_ms > kFadeInFallbackMs)) {
+    s_fade_in = false;
+    fadeTo(board::kDisplayBrightness);
+  }
 }
 
 bool displayScrollFrame(int, int, int, int, int) {

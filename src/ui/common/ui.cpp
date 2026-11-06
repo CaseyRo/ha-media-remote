@@ -5,6 +5,8 @@
 #include <cmath>
 #include <cstdlib>
 
+#include <WebServer.h>
+
 #include "board/board.h"
 #include "config.h"
 #include "log.h"
@@ -912,7 +914,17 @@ bool init(uint8_t rotation) {
   artwork::init();
   hw::touchInit();
   hw::encoderInit();
-  hw::batteryInit();
+  if (hw::batteryInit()) {
+    // The battery over the network, for logging a run-down with no cable:
+    // {"percent":93,"charging":false}, percent -1 with no battery.
+    wifiAddWebPage("/battery", [](WebServer& server) {
+      char body[48];
+      snprintf(body, sizeof(body), "{\"percent\":%d,\"charging\":%s}",
+               hw::batteryPercent(),
+               hw::batteryCharging() ? "true" : "false");
+      server.send(200, "application/json", body);
+    });
+  }
   return true;
 }
 

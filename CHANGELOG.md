@@ -21,6 +21,8 @@ GitHub release from that version's section, with
 - **The clock face dims the panel too**, on the AMOLED: its brightness steps down to `kDisplayDimBrightness` while the face is up, and back on a touch.
 - **Sleep and wake fade**, on the AMOLED: the panel fades down over about 150 ms before it sleeps, and on waking stays dark until the fresh frame is in and then fades up, rather than lighting at once on what its RAM kept through the sleep. The clock face's dimming fades as well.
 - **A lock, on the two buttons**, on the AMOLED 1.75 and 1.75C: PWR and BOOT pressed together lock the touch screen, and held together for `kUnlockHoldMs` unlock it, a ring filling round the edge as they are held. Locked, no tap or swipe acts; the elapsed chip reads *Locked*, and a touch makes it *Hold both buttons* for `kLockHintMs`. Touches still wake a blank screen or the clock, and PWR still sleeps it. The pair spends its press: letting go of PWR is no sleep, and BOOT held with PWR is no settings reset.
+- **The battery over the network**, on the AMOLED: `/battery` on the portal answers `{"percent":93,"charging":false}`, for logging a run-down without a cable.
+- **The radio naps between beacons** (`kWifiModemSleep`, modem sleep), where it was kept awake: the largest draw on a battery board, for about a tenth of a second more on a command or an update.
 - **The battery on the clock face**, on the AMOLED: above the time, *92%*, or *92% charging*, and *Locked* when it is; drawn again within 10 s of charging starting or stopping.
 
 ## [1.5.0] - 2026-11-03

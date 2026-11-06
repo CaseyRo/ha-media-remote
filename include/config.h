@@ -451,6 +451,10 @@ constexpr char kNtpServer[] = "pool.ntp.org";
 /** The lock (PWR and BOOT together, on a board with both): how long the pair
  *  must be held to unlock, and how long a touch while locked shows how. */
 constexpr unsigned long kUnlockHoldMs = 1000;
+/** Let the radio sleep between the access point's beacons (modem sleep)
+ *  rather than keep it awake: the largest draw on a battery board, for a
+ *  tenth of a second or so more on a command or an update. */
+constexpr bool kWifiModemSleep = true;
 constexpr unsigned long kLockHintMs = 2000;
 /** Earlier than this, the clock has not been set: the board has no RTC and
  *  starts at 1970 until SNTP answers. */

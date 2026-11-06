@@ -1465,7 +1465,7 @@ void prepareSta() {
   WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
   WiFi.mode(WIFI_STA);
   applyTxPower();  // after mode(): the core refuses it before the station runs
-  WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setSleep(config::kWifiModemSleep ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
   WiFi.setAutoReconnect(true);
 }
 

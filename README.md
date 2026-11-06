@@ -335,7 +335,7 @@ itself within a couple of seconds.
 
 ### Blanking, and the amplifier
 
-After **15 seconds** untouched (`kDimAfterMs`), now playing rests as a
+After **a minute** untouched (`kDimAfterMs`), now playing rests as a
 **dimmed clock**: the time, large and dim, with the title under it on up to
 two lines and the artist on its own while something plays, and on the AMOLED
 the battery above it, on black. A touch brings now playing back and does nothing else. The

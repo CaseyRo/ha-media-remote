@@ -442,7 +442,7 @@ constexpr unsigned long kIdleTimeoutMs = 300000;
  *  never does. A touch brings now playing back and does nothing else, as on
  *  a blanked panel. Blanking still follows kIdleTimeoutMs, from the clock as
  *  from now playing. */
-constexpr unsigned long kDimAfterMs = 15000;
+constexpr unsigned long kDimAfterMs = 60000;
 /** The clock face's zone, as a POSIX TZ string.
  *  shortcut: Berlin only, right for this fork; a build for anyone else wants
  *  it a setting, or taken from Home Assistant's time_zone. */

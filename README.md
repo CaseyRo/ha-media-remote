@@ -337,7 +337,8 @@ itself within a couple of seconds.
 
 After **15 seconds** untouched (`kDimAfterMs`), now playing rests as a
 **dimmed clock**: the time, large and dim, with the title under it on up to
-two lines and the artist on its own, on black. A touch brings now playing back and does nothing else. The
+two lines and the artist on its own while something plays, and on the AMOLED
+the battery above it, on black. A touch brings now playing back and does nothing else. The
 time comes from SNTP once Wi-Fi is up, in the zone `kTimeZone` names; until
 it has answered, the screen does not dim. The blanking below follows the
 same timer as before, from the clock as from now playing. On the AMOLED the
@@ -348,6 +349,13 @@ sleep, and a touch or another press wakes it. It is only the screen: the
 music plays on, playback starting elsewhere does not light it, and the
 volume device is switched off as below once the player has been paused for
 five minutes. Holding PWR still switches the board off.
+
+**PWR and BOOT together lock the touch screen** there, against a hand
+brushing the volume while picking it up: no tap or swipe acts, the chip at
+the foot of now playing reads *Locked*, and a touch makes it say *Hold both
+buttons*. Holding both for a second unlocks it, a ring filling round the
+edge as they are held. A touch still wakes the screen, and PWR still puts
+it to sleep.
 
 After **five minutes** with the player paused, idle, off or unavailable
 (`kIdleTimeoutMs`, `kBlankWhenPaused`), the screen blanks -- backlight off,
@@ -415,6 +423,10 @@ wakes the screen leave it alone. Details in
 | Search results | Tap a result | Play it: an artist as radio, anything else as itself |
 | Search | Swipe right | Back one step |
 | Blank screen | Any touch | Wake it; the volume device is left as it is |
+| Clock face | Any touch | Back to now playing, and nothing else |
+| PWR (AMOLED) | Short press | Screen to sleep, or awake again |
+| PWR + BOOT (AMOLED) | Press together | Lock the touch screen |
+| PWR + BOOT (AMOLED) | Hold together a second | Unlock it |
 | Knob (MaTouch 2.1") | Turn, on now playing | Volume, 2% a click; with the volume device off, the first turn switches it on, as play does, where it can be |
 | Knob (MaTouch 2.1") | Turn, on a list | Scroll a row a click |
 | Knob (MaTouch 2.1") | Press, on now playing | Play / pause |

@@ -130,3 +130,7 @@ void bootButtonInit();
 bool wifiBootButtonPressed();
 /** Call each loop iteration; triggers the settings reset on a long hold. */
 void bootButtonPollLongPress();
+/** This press of BOOT belongs to something else -- the lock, PWR and BOOT
+ *  together -- and is no settings reset however long it is held, until it
+ *  is let go. */
+void bootButtonSparePress();

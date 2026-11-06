@@ -327,6 +327,12 @@ void formatElapsed(const PlayerState& state, char* out, size_t out_len) {
              services::ha::tokenRejected() ? "Token rejected" : "Offline");
     return;
   }
+  // Locked, the chip says so, and for a moment after a touch, how to unlock.
+  if (state.locked) {
+    snprintf(out, out_len, "%s",
+             state.lock_hint ? "Hold both buttons" : "Locked");
+    return;
+  }
   const float position = services::ha::interpolatedPosition(state);
   if (position < 0.0f || state.duration_s <= 0.0f) {
     return;
@@ -399,7 +405,8 @@ int drawElapsedChip(lgfx::LovyanGFX& gfx, const PlayerState& state) {
 
   gfx.fillRoundRect(theme::kCenterX - w / 2, theme::kElapsedY - h / 2, w,
                     h, theme::kElapsedPillRadius, theme::kSurface);
-  gfx.setTextColor(state.offline ? theme::kWarning : theme::kTextSecondary);
+  gfx.setTextColor(state.offline || state.lock_hint ? theme::kWarning
+                                                    : theme::kTextSecondary);
   gfx.drawString(label, theme::kCenterX, theme::kElapsedY);
   return w;
 }

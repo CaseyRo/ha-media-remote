@@ -99,6 +99,15 @@ long g_dim_minute = -1;
 /** The PWR key put the screen to sleep: only a touch or PWR again wakes it,
  *  not playback, as it would after the idle blank. Loop only. */
 bool g_asleep = false;
+/** Until when a touch while locked shows how to unlock; 0 when it is not.
+ *  Loop only. */
+unsigned long g_lock_hint_until = 0;
+
+/** The lock, as the elapsed chip shows it. */
+void markLock(PlayerState& state) {
+  state.locked = ui::isLocked();
+  state.lock_hint = state.locked && g_lock_hint_until != 0;
+}
 
 /** A volume gesture is in progress somewhere on the panel, so a poll must not
  *  contradict it. The display owns the gesture; this is a copy of
@@ -394,6 +403,7 @@ void showNowPlaying() {
     g_off_here_repaint_owed = true;
   }
 
+  markLock(snapshot);
   // Resting on the clock: what changed shows there, under the time.
   if (ui::isDimmed()) {
     ui::dim(&snapshot);
@@ -2498,6 +2508,32 @@ void portalIdle() {
       LOG_INFO("UI: asleep (PWR)");
       break;
 
+    case Intent::kLock:
+      // Shown on now playing's chip, so it goes there from a list.
+      LOG_INFO("UI: locked (PWR + BOOT)");
+      if (g_screen != Screen::kNowPlaying) {
+        showNowPlaying();
+      }
+      g_state_dirty = true;
+      break;
+
+    case Intent::kUnlock:
+      LOG_INFO("UI: unlocked");
+      g_lock_hint_until = 0;
+      g_np_since_ms = millis();
+      g_state_dirty = true;
+      break;
+
+    case Intent::kLockedTouch:
+      // Someone is here: the clock waits, and the chip says how to unlock.
+      g_lock_hint_until = millis() + config::kLockHintMs;
+      if (g_lock_hint_until == 0) {
+        g_lock_hint_until = 1;
+      }
+      g_np_since_ms = millis();
+      g_state_dirty = true;
+      break;
+
     case Intent::kPrevious:
     case Intent::kPlayPause:
     case Intent::kNext:
@@ -2941,7 +2977,7 @@ void haPollTask(void*) {
       return;
     }
     const long minute = static_cast<long>(time(nullptr) / 60);
-    if (minute != g_dim_minute) {
+    if (minute != g_dim_minute || ui::dimStale()) {
       g_dim_minute = minute;
       g_state_dirty = true;  // drawn again by showNowPlaying()
     }
@@ -2966,6 +3002,15 @@ void haPollTask(void*) {
   }
 }
 
+/** Take the unlock hint down once kLockHintMs is up. Loop only. */
+[[gnu::noinline]] void handleLockHint() {
+  if (g_lock_hint_until != 0 &&
+      static_cast<long>(millis() - g_lock_hint_until) >= 0) {
+    g_lock_hint_until = 0;
+    g_state_dirty = true;
+  }
+}
+
 /** The elapsed chip, once a second while something plays. */
 [[gnu::noinline]] void handleElapsedTick() {
   if (ui::isBlanked() || ui::isDimmed() || g_screen != Screen::kNowPlaying ||
@@ -2976,6 +3021,7 @@ void haPollTask(void*) {
   PlayerState snapshot;
   if (snapshotState(snapshot) &&
       snapshot.playback == PlaybackState::kPlaying) {
+    markLock(snapshot);
     ui::refreshElapsed(snapshot);
   }
 }
@@ -3133,6 +3179,7 @@ void loop() {
   handleStatusRefresh();
 
   handleClock();
+  handleLockHint();
   handleDimming();
   handleElapsedTick();
 

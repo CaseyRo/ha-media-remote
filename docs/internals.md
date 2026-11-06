@@ -396,8 +396,13 @@ Waveshare's examples do instead, with the 120 ms the controller needs to wake.
 The CST9217 touch controller is read by hand (`touch_raw.cpp`): LovyanGFX's
 `Touch_CST226` speaks the same protocol but accepts only the CST226's chip id.
 The AXP2101 power manager is read for the battery's charge and the PWR
-key's short press (`hardware/battery.cpp`), its fuel gauge turned on if it
-is off; it is
+key (`hardware/battery.cpp`), its fuel gauge turned on if it is off. The
+key is read from its interrupt status, polled every 100 ms: its short press,
+and its falling and rising edges, which say whether it is held. They are
+armed as Waveshare's example for this board arms them -- every other
+interrupt off, all three status registers cleared, and all three cleared
+again after each read. Armed by setting only the key's bits and clearing
+only its status, the key was never seen. The power manager is
 otherwise left alone, as are the QMI8658 IMU and audio.
 
 `amoled466-s3` is the 1.75 (Rev 1.1, with an SD card slot). The 1.75C has

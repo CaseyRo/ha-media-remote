@@ -448,6 +448,10 @@ constexpr unsigned long kDimAfterMs = 15000;
  *  it a setting, or taken from Home Assistant's time_zone. */
 constexpr char kTimeZone[] = "CET-1CEST,M3.5.0,M10.5.0/3";
 constexpr char kNtpServer[] = "pool.ntp.org";
+/** The lock (PWR and BOOT together, on a board with both): how long the pair
+ *  must be held to unlock, and how long a touch while locked shows how. */
+constexpr unsigned long kUnlockHoldMs = 1000;
+constexpr unsigned long kLockHintMs = 2000;
 /** Earlier than this, the clock has not been set: the board has no RTC and
  *  starts at 1970 until SNTP answers. */
 constexpr time_t kClockSetAfter = 1700000000;

@@ -9,11 +9,13 @@
 #include "config.h"
 #include "log.h"
 #include "hardware/battery.h"
+#include "hardware/boot_button.h"
 #include "hardware/display.h"
 #include "hardware/encoder.h"
 #include "hardware/touch.h"
 #include "services/browse.h"
 #include "services/search.h"
+#include "services/wifi_setup.h"
 #include "ui/artwork.h"
 #include "ui/clock_face.h"
 #include "ui/back_button.h"
@@ -917,6 +919,63 @@ bool init(uint8_t rotation) {
 namespace {
 /** The clock face is up in place of now playing: see dim(). */
 bool s_dimmed = false;
+/** Whether it was charging when the clock face was last drawn. */
+bool s_drawn_charging = false;
+/** No touch acts: PWR and BOOT together set it, and the pair held clears it. */
+bool s_locked = false;
+/** Both buttons are down, or were and not both let go yet; when that began,
+ *  and whether this press has locked or unlocked already. */
+bool s_pair = false;
+unsigned long s_pair_since = 0;
+bool s_pair_done = false;
+
+/** The ring round the edge that fills while the pair is held to unlock,
+ *  from the top, clockwise, on the volume ring's track; and how far it is
+ *  drawn. */
+constexpr float kUnlockRingStartDeg = -90.0f;
+float s_ring_deg = kUnlockRingStartDeg;
+
+/** Fill the ring to `fraction` of the way round, a tenth of a turn or so at a
+ *  time: only the new stretch is drawn, and where the panel takes no direct
+ *  writes (the AMOLED) the box round it is pushed from the frame. The repaint
+ *  that unlocking, or letting go early, asks for takes it down again. */
+void drawUnlockRing(float fraction) {
+  if (displayIsBlanked()) {
+    return;
+  }
+  const float to = kUnlockRingStartDeg + 360.0f * fraction;
+  if (to - s_ring_deg < 10.0f) {
+    return;
+  }
+  panel().fillArc(theme::kCenterX, theme::kCenterY,
+                  theme::kVolumeArcInnerRadius, theme::kVolumeArcOuterRadius,
+                  s_ring_deg, to, theme::kAccent);
+  if (!board::kPanelWritesDirect) {
+    // The outer edge's extent over the stretch, widened by the ring's width
+    // so the inner edge is inside it too.
+    constexpr float kRad = 3.14159265f / 180.0f;
+    int x0 = theme::kSize, y0 = theme::kSize, x1 = 0, y1 = 0;
+    for (float a = s_ring_deg;; a += 5.0f) {
+      const float t = (a < to ? a : to) * kRad;
+      const int x = theme::kCenterX +
+                    static_cast<int>(cosf(t) * theme::kVolumeArcOuterRadius);
+      const int y = theme::kCenterY +
+                    static_cast<int>(sinf(t) * theme::kVolumeArcOuterRadius);
+      x0 = x < x0 ? x : x0;
+      x1 = x > x1 ? x : x1;
+      y0 = y < y0 ? y : y0;
+      y1 = y > y1 ? y : y1;
+      if (a >= to) {
+        break;
+      }
+    }
+    const int pad =
+        theme::kVolumeArcOuterRadius - theme::kVolumeArcInnerRadius + 2;
+    canvasPresentRegion(x0 - pad, y0 - pad, x1 - x0 + 2 * pad,
+                        y1 - y0 + 2 * pad);
+  }
+  s_ring_deg = to;
+}
 
 /** The panel's own brightness down while the clock face is up, on a panel
  *  that has one; elsewhere the face's dim pixels are all the dimming. */
@@ -940,9 +999,54 @@ Input poll(Screen screen, const PlayerState* state) {
     statusScreenForgetCard();
   }
 
-  // The PWR key, on a board whose power manager reports it: a press puts
-  // the screen to sleep, or wakes it again, and does nothing else.
-  if (hw::powerKeyTakePress()) {
+  // The two buttons, on a board whose power manager reports PWR. Together
+  // they lock the touch screen, or, held kUnlockHoldMs, unlock it -- one of
+  // the two per press. The pair spends its press: letting go of PWR is no
+  // sleep, and BOOT held with PWR is no settings reset.
+  const bool boot = hw::bootButtonPressed();
+  const bool pwr = hw::powerKeyHeld();
+  bool pwr_press = hw::powerKeyTakePress();
+  if (boot && pwr) {
+    if (!s_pair) {
+      s_pair = true;
+      s_pair_since = millis();
+      s_pair_done = false;
+      s_ring_deg = kUnlockRingStartDeg;
+    }
+    if (!s_pair_done && !s_locked) {
+      s_pair_done = true;
+      s_locked = true;
+      hw::touchCancel();
+      out.intent = Intent::kLock;
+    } else if (!s_pair_done) {
+      const unsigned long held = millis() - s_pair_since;
+      if (held >= config::kUnlockHoldMs) {
+        s_pair_done = true;
+        s_locked = false;
+        out.intent = Intent::kUnlock;
+      } else {
+        drawUnlockRing(static_cast<float>(held) / config::kUnlockHoldMs);
+      }
+    }
+  }
+  if (s_pair) {
+    pwr_press = false;
+    if (boot) {
+      bootButtonSparePress();
+    }
+    if (!boot && !pwr) {
+      s_pair = false;
+      // Let go before the second was up: the ring comes down, and the chip
+      // says what it wanted.
+      if (!s_pair_done) {
+        out.intent = Intent::kLockedTouch;
+      }
+    }
+    return out;
+  }
+
+  // PWR alone, briefly: the screen to sleep, or awake again, and nothing else.
+  if (pwr_press) {
     if (displayIsBlanked()) {
       wake();
       out.intent = Intent::kWokeFromTouch;
@@ -972,6 +1076,18 @@ Input poll(Screen screen, const PlayerState* state) {
         wake();
       }
       out.intent = Intent::kWokeFromTouch;
+    }
+    return out;
+  }
+
+  // Locked: no touch acts, and the knob is spent as well. A finished touch
+  // says how to unlock.
+  if (s_locked) {
+    hw::TouchReport discard;
+    const bool turned = hw::encoderTakeDetents() != 0;
+    const bool pressed = hw::encoderTakePress();
+    if (hw::touchPoll(discard) || turned || pressed) {
+      out.intent = Intent::kLockedTouch;
     }
     return out;
   }
@@ -1313,11 +1429,23 @@ bool dim(const PlayerState* state) {
     dimPanel(true);
   }
   clock_face::draw(state, local);
+  s_drawn_charging = hw::batteryCharging();
   s_dimmed = true;
   return true;
 }
 
 bool isDimmed() { return s_dimmed; }
+
+bool dimStale() {
+  static unsigned long s_checked_ms = 0;
+  if (!s_dimmed || millis() - s_checked_ms < 10000) {
+    return false;
+  }
+  s_checked_ms = millis();
+  return hw::batteryCharging() != s_drawn_charging;
+}
+
+bool isLocked() { return s_locked; }
 
 void undim() {
   if (s_dimmed) {

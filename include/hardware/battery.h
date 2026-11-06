@@ -29,4 +29,7 @@ bool batteryCharging();
  *  the bus at most every 100 ms, so call it as often as touch is read. */
 bool powerKeyTakePress();
 
+/** True while the PWR key is held down, as of the last read. */
+bool powerKeyHeld();
+
 }  // namespace hw

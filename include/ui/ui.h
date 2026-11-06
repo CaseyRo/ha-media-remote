@@ -68,6 +68,9 @@ enum class Intent : uint8_t {
   kCancelStart,       // back from the Starting... card: stop waiting for it
   kWokeFromTouch,     // a tap landed on a blanked panel and only woke it
   kSleep,             // the PWR key: the screen off until a touch or PWR
+  kLock,              // PWR and BOOT together: the touch screen locked
+  kUnlock,            // the pair held kUnlockHoldMs: unlocked
+  kLockedTouch,       // a touch while locked, which did nothing
   kOpenStatus,
   kTapCard,           // a tap on a status card, which the app may act on
   kOpenWifi,          // the network list, a swipe left from the status page
@@ -267,6 +270,11 @@ void wake();
  *  Intent::kWokeFromTouch from poll(), as on a blanked panel. */
 bool dim(const services::ha::PlayerState* state);
 bool isDimmed();
+/** The clock face says something that has changed since it was drawn --
+ *  charging started or stopped -- checked every 10 s while it is up. */
+bool dimStale();
+/** No touch acts: see Intent::kLock. */
+bool isLocked();
 /** Forget the clock face without drawing, for when another screen has
  *  taken its place. */
 void undim();

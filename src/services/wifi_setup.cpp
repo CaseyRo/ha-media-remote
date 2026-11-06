@@ -1907,6 +1907,8 @@ void wifiSetObserver(const WifiObserver& observer) {
 
 void bootButtonInit() { hw::bootButtonInit(); }
 
+void bootButtonSparePress() { s_long_press_handled = true; }
+
 void bootButtonPollLongPress() {
   static unsigned long s_down_since = 0;
 

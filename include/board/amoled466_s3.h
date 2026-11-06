@@ -131,7 +131,7 @@ constexpr bool kDisplayInvert = false;
 constexpr uint8_t kDisplayBrightness = 200;
 /** The panel's own brightness while the clock face is up: a step down from
  *  kDisplayBrightness on top of the face's dim pixels. */
-constexpr uint8_t kDisplayDimBrightness = 120;
+constexpr uint8_t kDisplayDimBrightness = 60;
 
 // --- Touch: CST9217 capacitive controller (I2C) ----------------------------
 // Read by hand in hardware/amoled466/touch_raw.cpp: LovyanGFX's nearest

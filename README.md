@@ -336,14 +336,11 @@ itself within a couple of seconds.
 
 ### Blanking, and the amplifier
 
-After **a minute** untouched (`kDimAfterMs`), now playing rests as a
-**dimmed clock**: the time, large and dim, with the title under it on up to
-two lines and the artist on its own while something plays, and on the AMOLED
-the battery above it, on black. A touch brings now playing back and does nothing else. The
-time comes from SNTP once Wi-Fi is up, in the zone `kTimeZone` names; until
-it has answered, the screen does not dim. The blanking below follows the
-same timer as before, from the clock as from now playing. On the AMOLED the
-panel's own brightness steps down while the clock is up.
+After **a minute** untouched (`kDimAfterMs`), now playing rests on
+**standby**: the cover and the track text without the controls, and on the
+AMOLED the battery above them and the panel's own brightness stepped down. A
+touch brings now playing back and does nothing else. The blanking below
+follows the same timer as before, from standby as from now playing.
 
 On the AMOLED 1.75 and 1.75C, a short press of **PWR** puts the screen to
 sleep, and a touch or another press wakes it. It is only the screen: the
@@ -424,7 +421,7 @@ wakes the screen leave it alone. Details in
 | Search results | Tap a result | Play it: an artist as radio, anything else as itself |
 | Search | Swipe right | Back one step |
 | Blank screen | Any touch | Wake it; the volume device is left as it is |
-| Clock face | Any touch | Back to now playing, and nothing else |
+| Standby | Any touch | Back to now playing, and nothing else |
 | PWR (AMOLED) | Short press | Screen to sleep, or awake again |
 | PWR + BOOT (AMOLED) | Press together | Lock the touch screen |
 | PWR + BOOT (AMOLED) | Hold together a second | Unlock it |

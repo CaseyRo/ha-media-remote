@@ -24,6 +24,10 @@ enum class Action : uint8_t {
  *  say it. */
 void draw(const services::ha::PlayerState& state);
 
+/** Now playing without its controls -- the cover, its scrim and the track
+ *  text -- composed into the frame for standby. The caller presents it. */
+void composeStandby(const services::ha::PlayerState& state);
+
 /** Repaint just the elapsed/total chip straight to the panel. It sits on an
  *  opaque pill for exactly this reason -- no recompose, so the cover art
  *  underneath is never decoded again. */

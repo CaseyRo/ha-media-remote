@@ -13,13 +13,13 @@
 #include "hardware/battery.h"
 #include "hardware/boot_button.h"
 #include "hardware/display.h"
+#include "hardware/display_font.h"
 #include "hardware/encoder.h"
 #include "hardware/touch.h"
 #include "services/browse.h"
 #include "services/search.h"
 #include "services/wifi_setup.h"
 #include "ui/artwork.h"
-#include "ui/clock_face.h"
 #include "ui/back_button.h"
 #include "ui/browse_list.h"
 #include "ui/canvas.h"
@@ -31,6 +31,7 @@
 #include "ui/search.h"
 #include "ui/settings_list.h"
 #include "ui/status_screens.h"
+#include "ui/text.h"
 #include "ui/theme.h"
 #include "ui/wifi_join.h"
 
@@ -929,9 +930,9 @@ bool init(uint8_t rotation) {
 }
 
 namespace {
-/** The clock face is up in place of now playing: see dim(). */
+/** Standby is up in place of now playing: see dim(). */
 bool s_dimmed = false;
-/** Whether it was charging when the clock face was last drawn. */
+/** Whether it was charging when standby was last drawn. */
 bool s_drawn_charging = false;
 /** No touch acts: PWR and BOOT together set it, and the pair held clears it. */
 bool s_locked = false;
@@ -989,7 +990,7 @@ void drawUnlockRing(float fraction) {
   s_ring_deg = to;
 }
 
-/** The panel's own brightness down while the clock face is up, on a panel
+/** The panel's own brightness down while standby is up, on a panel
  *  that has one; elsewhere the face's dim pixels are all the dimming. */
 void dimPanel(bool dimmed) {
 #if defined(BOARD_PANEL_AMOLED)
@@ -1072,7 +1073,7 @@ Input poll(Screen screen, const PlayerState* state) {
     return out;
   }
 
-  // A touch on a blanked panel, or on the clock face, only wakes it. Handled
+  // A touch on a blanked panel, or on standby, only wakes it. Handled
   // before anything else reads the touch state, so the same press cannot
   // also press a button.
   if (displayIsBlanked() || s_dimmed) {
@@ -1436,18 +1437,35 @@ void wake() {
   hw::touchCancel();
 }
 
-bool dim(const PlayerState* state) {
-  struct tm local;
-  if (!clock_face::now(local)) {
-    return false;
-  }
+void dim(const PlayerState& state) {
   if (!s_dimmed) {
     dimPanel(true);
   }
-  clock_face::draw(state, local);
+  now_playing::composeStandby(state);
+  // Above the cover: the battery, on a board with one, and the lock.
+  char top[48] = {};
+  const int pct = hw::batteryPercent();
+  const char* lock = s_locked ? "Locked" : "";
+  if (pct >= 0) {
+    snprintf(top, sizeof(top), "%s%s%d%%%s", lock, lock[0] ? " \xC2\xB7 " : "",
+             pct, hw::batteryCharging() ? " charging" : "");
+  } else {
+    snprintf(top, sizeof(top), "%s", lock);
+  }
+  if (top[0] != '\0') {
+    lgfx::LovyanGFX& gfx = canvas();
+    const int y = theme::px(42);
+    displayFontApplyHeight(gfx, theme::kElapsedTextPx);
+    gfx.setTextDatum(textdatum_t::middle_center);
+    gfx.setTextColor(theme::kTextSecondary);
+    char shown[text::kMaxLineLen];
+    text::ellipsize(gfx, top, theme::usableWidthAt(y, theme::kTextEdgeInset),
+                    shown, sizeof(shown));
+    gfx.drawString(shown, theme::kCenterX, y);
+  }
+  canvasPresent();
   s_drawn_charging = hw::batteryCharging();
   s_dimmed = true;
-  return true;
 }
 
 bool isDimmed() { return s_dimmed; }

@@ -543,7 +543,8 @@ uint32_t trackTextKey(uint32_t art, bool has_art, const PlayerState& state) {
 }
 
 /** Draw the whole screen into the frame buffer. */
-void compose(lgfx::LovyanGFX& gfx, const PlayerState& state) {
+void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
+             bool controls = true) {
   displayFontEnsureLoaded(gfx);
 
   // The cover, its scrim and the track text over them, kept from the last
@@ -581,6 +582,11 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state) {
       ui::canvasSaveBackdrop(ui::Backdrop::kArtAndText, with_text);
     }
   }
+  // Standby is the cover and the track text alone: no controls to touch.
+  if (!controls) {
+    s_arc_backdrop_valid = false;
+    return;
+  }
   // Before the volume arc's backdrop is kept, so that copy agrees with it
   // wherever the two might meet.
   drawProgressArc(gfx, state);
@@ -602,6 +608,10 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state) {
 }
 
 }  // namespace
+
+void composeStandby(const PlayerState& state) {
+  compose(ui::canvas(), state, false);
+}
 
 void draw(const PlayerState& state) {
   s_last_drawn = state;

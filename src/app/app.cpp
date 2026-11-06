@@ -93,9 +93,6 @@ unsigned long g_list_opened_ms = 0;
  *  waking -- for kDimAfterMs, which counts from this or the last touch,
  *  whichever is later. Loop only. */
 unsigned long g_np_since_ms = 0;
-/** The minute the clock face last drew, so the next one draws again. Loop
- *  only. */
-long g_dim_minute = -1;
 /** The PWR key put the screen to sleep: only a touch or PWR again wakes it,
  *  not playback, as it would after the idle blank. Loop only. */
 bool g_asleep = false;
@@ -374,7 +371,13 @@ void showNowPlaying() {
   }
 
   PlayerState snapshot;
-  if (!snapshotState(snapshot)) {
+  const bool have_state = snapshotState(snapshot);
+  if (!have_state && ui::isDimmed()) {
+    // A state not to hand for a moment -- a 50 ms wait on the poll task, as
+    // around a track change -- is no reason to take standby away for a card.
+    return;
+  }
+  if (!have_state) {
     // Either no poll has ever succeeded, or the 50 ms wait for the state
     // mutex expired -- which reads the same from here and does not from
     // the console, so say which.
@@ -404,9 +407,9 @@ void showNowPlaying() {
   }
 
   markLock(snapshot);
-  // Resting on the clock: what changed shows there, under the time.
+  // Resting on standby: what changed shows there.
   if (ui::isDimmed()) {
-    ui::dim(&snapshot);
+    ui::dim(snapshot);
     g_screen = Screen::kNowPlaying;
     return;
   }
@@ -2942,33 +2945,9 @@ void haPollTask(void*) {
   }
 }
 
-/** Ask SNTP for the time the first time Wi-Fi is up -- the board has no RTC
- *  -- and say when it has answered. SNTP keeps the clock in step by itself
- *  from then on, across reconnects. Loop only. */
-[[gnu::noinline]] void handleClock() {
-  static bool s_asked = false;
-  static bool s_set = false;
-  if (!s_asked) {
-    if (WiFi.status() != WL_CONNECTED) {
-      return;
-    }
-    s_asked = true;
-    configTzTime(config::kTimeZone, config::kNtpServer);
-    LOG_INFO("Clock: asking %s for the time", config::kNtpServer);
-    return;
-  }
-  const time_t t = time(nullptr);
-  if (!s_set && t >= config::kClockSetAfter) {
-    s_set = true;
-    struct tm local;
-    localtime_r(&t, &local);
-    LOG_INFO("Clock: set, %02d:%02d local", local.tm_hour, local.tm_min);
-  }
-}
-
-/** Rest now playing as the clock face once nobody has touched it for
- *  kDimAfterMs, and keep the face's minute current while it is up. Blanking
- *  is handleIdleBlanking()'s, from the clock as from now playing. Loop only. */
+/** Rest now playing as standby once nobody has touched it for kDimAfterMs,
+ *  and draw it again when the charge it shows changes. Blanking is
+ *  handleIdleBlanking()'s, from standby as from now playing. Loop only. */
 [[gnu::noinline]] void handleDimming() {
   if (ui::isDimmed()) {
     // A card or a list has the screen now.
@@ -2976,16 +2955,13 @@ void haPollTask(void*) {
       ui::undim();
       return;
     }
-    const long minute = static_cast<long>(time(nullptr) / 60);
-    if (minute != g_dim_minute || ui::dimStale()) {
-      g_dim_minute = minute;
+    if (ui::dimStale()) {
       g_state_dirty = true;  // drawn again by showNowPlaying()
     }
     return;
   }
   if (config::kDimAfterMs == 0 || g_screen != Screen::kNowPlaying ||
-      ui::isBlanked() || g_volume_dragging ||
-      time(nullptr) < config::kClockSetAfter) {
+      ui::isBlanked() || g_volume_dragging) {
     return;
   }
   unsigned long since = ui::lastInteractionMs();
@@ -2996,9 +2972,10 @@ void haPollTask(void*) {
     return;
   }
   PlayerState snapshot;
-  if (snapshotState(snapshot) && ui::dim(&snapshot)) {
-    g_dim_minute = static_cast<long>(time(nullptr) / 60);
-    LOG_INFO("UI: resting on the clock");
+  if (snapshotState(snapshot)) {
+    markLock(snapshot);
+    ui::dim(snapshot);
+    LOG_INFO("UI: standby");
   }
 }
 
@@ -3178,7 +3155,6 @@ void loop() {
   ui::idleWork(g_screen);
   handleStatusRefresh();
 
-  handleClock();
   handleLockHint();
   handleDimming();
   handleElapsedTick();

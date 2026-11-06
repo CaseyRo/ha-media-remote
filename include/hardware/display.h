@@ -33,7 +33,7 @@ void displayWake();
 
 bool displayIsBlanked();
 
-/** The panel's own brightness down while the clock face is up, or back.
+/** The panel's own brightness down while standby is up, or back.
  *  Only the AMOLED defines it -- a panel that sets its own brightness -- and
  *  only BOARD_PANEL_AMOLED builds call it. Ignored while blanked: waking
  *  restores full brightness itself. */

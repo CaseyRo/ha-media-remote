@@ -141,8 +141,8 @@ void blank() {
   }
 }
 
-// No screen, so no clock face: now playing never rests.
-bool dim(const services::ha::PlayerState*) { return false; }
+// No screen, so no standby: now playing never rests.
+void dim(const services::ha::PlayerState&) {}
 bool isDimmed() { return false; }
 bool dimStale() { return false; }
 bool isLocked() { return false; }

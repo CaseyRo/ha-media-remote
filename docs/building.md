@@ -162,13 +162,9 @@ python scripts/build_ui_font.py assets/fonts/NotoSans-Regular.ttf \
     --out-dir data --heights 23,26,30,36
 ```
 
-The clock face's digits are a face of their own, of only the characters it
-draws -- 369 glyphs at 101 px would not fit in an app slot:
-
-```bash
-python scripts/build_ui_font.py assets/fonts/NotoSans-Regular.ttf \
-    --out-dir data --heights 101 --chars '0123456789:' --prefix clock_font
-```
+A face of only some characters, under a name of its own, is `--chars` and
+`--prefix` -- `--chars '0123456789:' --prefix digits`, say -- for text the
+full set would make too large for an app slot.
 
 The generator solves a whole-pixel size for each height, and five land a
 pixel high: 15, 23, 33, 36 and 38 measure 16, 24, 34, 37 and 39. That is inside the
@@ -182,7 +178,7 @@ its env, and `kFonts[]` in its `src/hardware/<board>/font_table.cpp`.
 |---|---|
 | Waveshare | 15, 17, 20, 24 |
 | DFR1221 | 23, 26, 30, 36 |
-| AMOLED 1.75 | 29, 33, 39, 47, and 101 for the clock: digits and a colon only |
+| AMOLED 1.75 | 29, 33, 39, 47 |
 | Qualia | 34, 38, 45, 54, and 23, 26, 30 for the lists |
 | 2.8C | 23, 26, 30, 36 -- the DFR1221's, at a text scale of 0.75 |
 | MaTouch 2.1" | 23, 26, 30, 36 -- the 2.8C's |

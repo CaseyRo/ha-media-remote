@@ -264,13 +264,13 @@ void blank();
 /** Bring the panel back and force a fresh frame. */
 void wake();
 
-/** Rest now playing as the dimmed clock face, or draw it again: the time and
- *  `state`'s title and artist. False, drawing nothing, until the clock has
- *  been set. A touch then only brings now playing back, returning
+/** Rest now playing as standby, or draw it again: the cover and the track
+ *  text without the controls, the battery and the lock above them, the panel
+ *  dimmed. A touch then only brings now playing back, returning
  *  Intent::kWokeFromTouch from poll(), as on a blanked panel. */
-bool dim(const services::ha::PlayerState* state);
+void dim(const services::ha::PlayerState& state);
 bool isDimmed();
-/** The clock face says something that has changed since it was drawn --
+/** Standby says something that has changed since it was drawn --
  *  charging started or stopped -- checked every 10 s while it is up. */
 bool dimStale();
 /** No touch acts: see Intent::kLock. */

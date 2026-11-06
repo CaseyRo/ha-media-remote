@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <ctime>
 
 /**
  * How the remote behaves, not what it runs on.
@@ -438,16 +437,11 @@ constexpr unsigned long kHaPlayerListTtlMs = 300000;
  *  wakes it, as does playback resuming; polling carries on while blanked,
  *  which is what notices. */
 constexpr unsigned long kIdleTimeoutMs = 300000;
-/** Now playing rests as the dimmed clock face after this long untouched; 0
+/** Now playing rests as standby after this long untouched; 0
  *  never does. A touch brings now playing back and does nothing else, as on
- *  a blanked panel. Blanking still follows kIdleTimeoutMs, from the clock as
+ *  a blanked panel. Blanking still follows kIdleTimeoutMs, from standby as
  *  from now playing. */
 constexpr unsigned long kDimAfterMs = 60000;
-/** The clock face's zone, as a POSIX TZ string.
- *  shortcut: Berlin only, right for this fork; a build for anyone else wants
- *  it a setting, or taken from Home Assistant's time_zone. */
-constexpr char kTimeZone[] = "CET-1CEST,M3.5.0,M10.5.0/3";
-constexpr char kNtpServer[] = "pool.ntp.org";
 /** The lock (PWR and BOOT together, on a board with both): how long the pair
  *  must be held to unlock, and how long a touch while locked shows how. */
 constexpr unsigned long kUnlockHoldMs = 1000;
@@ -456,9 +450,6 @@ constexpr unsigned long kUnlockHoldMs = 1000;
  *  tenth of a second or so more on a command or an update. */
 constexpr bool kWifiModemSleep = true;
 constexpr unsigned long kLockHintMs = 2000;
-/** Earlier than this, the clock has not been set: the board has no RTC and
- *  starts at 1970 until SNTP answers. */
-constexpr time_t kClockSetAfter = 1700000000;
 /** Whether paused counts as idle for standing down.
  *
  *  On, which it was not originally. A paused player is often one you are about

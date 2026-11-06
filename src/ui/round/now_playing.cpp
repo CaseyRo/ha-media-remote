@@ -12,12 +12,20 @@
 #include "config.h"
 #include "hardware/display.h"
 #include "hardware/display_font.h"
-#include "ui/cover_art.h"
 #include "ui/canvas.h"
+#include "ui/cover_art.h"
+#include "ui/paint.h"
 #include "ui/peers_chip.h"
 #include "ui/text.h"
 #include "ui/text_glow.h"
 #include "ui/theme.h"
+
+// The round now playing, laid out as Apple Music's: the cover top centre on
+// its own blur, title and artist under it, a scrubber with elapsed and
+// remaining time, three plain glyphs, the volume as a thin ring at the rim.
+// Nothing sits on an opaque shape any more, so every small repaint -- a glyph
+// pressed, the scrubber's second -- first puts back the kept frame under it
+// (canvasRestoreBackdropRegion) and draws anti-aliased over that (ui/paint.h).
 
 namespace ui::now_playing {
 namespace {
@@ -30,39 +38,50 @@ using services::ha::PlayerState;
 PlayerState s_last_drawn;
 
 /** What the ring the knob can cover looked like just before the volume arc
- *  went on, so a drag can put back what the knob was covering. The knob is
- *  wider than the arc -- a 6 px radius on a 7 px ring -- so drawing the new
- *  one over the old left a crescent either side of the ring, and its dark
- *  rim, at every step.
- *
- *  Laid out as a whole frame, so a pixel sits at the same offset in both, but
- *  only the ring is ever copied in -- see ringSpans(). PSRAM, claimed once. */
+ *  went on, so a drag can put back what was under it. Laid out as a whole
+ *  frame, so a pixel sits at the same offset in both, but only the ring is
+ *  ever copied in -- see ringSpans(). PSRAM, claimed once. */
 uint16_t* s_arc_backdrop = nullptr;
 bool s_arc_backdrop_valid = false;
 /** Where the knob is in the canvas right now. */
 float s_arc_drawn_level = -1.0f;
 
+/** The key the cover-and-text frame was kept under at the last compose, which
+ *  the small repaints restore from; not valid when none was kept. */
+uint32_t s_text_key = 0;
+bool s_text_key_valid = false;
+
 struct Button {
   Action action;
   int cx;
   int cy;
-  int radius;
+  int half;  // the glyph's half height
 };
 
 Button buttonFor(Action action) {
-  const int y = theme::kTransportRowY;
+  const int y = theme::kNpTransportY;
   switch (action) {
     case Action::kPrevious:
-      return {Action::kPrevious, theme::kCenterX - theme::kTransportSpacing, y,
-              theme::kTransportRadius};
+      return {Action::kPrevious, theme::kCenterX - theme::kNpTransportSpacing,
+              y, theme::kNpSkipHalfHeight};
     case Action::kNext:
-      return {Action::kNext, theme::kCenterX + theme::kTransportSpacing, y,
-              theme::kTransportRadius};
+      return {Action::kNext, theme::kCenterX + theme::kNpTransportSpacing, y,
+              theme::kNpSkipHalfHeight};
     case Action::kPlayPause:
     default:
       return {Action::kPlayPause, theme::kCenterX, y,
-              theme::kTransportPlayRadius};
+              theme::kNpPlayHalfHeight};
   }
+}
+
+/** The box a glyph is drawn, restored and pushed in: wide enough for the
+ *  widest of them (the skip pair, 2.15 half heights) with a pixel of air. */
+void glyphBox(const Button& b, int& x, int& y, int& w, int& h) {
+  const int half_w = (b.half * 6) / 5 + 2;
+  x = b.cx - half_w;
+  y = b.cy - b.half - 2;
+  w = 2 * half_w + 1;
+  h = 2 * b.half + 5;
 }
 
 bool isPlaying(const PlayerState& state) {
@@ -112,90 +131,123 @@ bool enabledFor(Action action, const PlayerState& state) {
 }
 
 // --- Glyphs -----------------------------------------------------------------
-// Drawn as vectors rather than bitmaps so they stay crisp at any diameter.
+// Apple's filled transport symbols: a play triangle, two pause bars, and a
+// pair of triangles for each skip. Rasterised 4x4 supersampled into a
+// coverage mask and laid over the backdrop, so their edges are as smooth as
+// the type's.
 
-void drawPlayGlyph(lgfx::LGFXBase& gfx, int cx, int cy, uint16_t color) {
-  const int gh = theme::kGlyphHalfHeight;
-  const int gw = theme::kGlyphHalfWidth;
-  // A triangle's visual centre sits a third of the way back from the apex;
-  // nudge right so it looks centred in the disc rather than measured centred.
-  const int x0 = cx - (gw * 2) / 3;
-  gfx.fillTriangle(x0, cy - gh, x0, cy + gh, x0 + gw + gw / 2, cy, color);
+struct Tri {
+  float x0, y0, x1, y1, x2, y2;
+};
+struct Rect {
+  float x0, y0, x1, y1;
+};
+struct Shape {
+  Tri tri[2];
+  int tris = 0;
+  Rect rect[2];
+  int rects = 0;
+};
+
+inline float edgeFn(float ax, float ay, float bx, float by, float px,
+                    float py) {
+  return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
 }
 
-void drawPauseGlyph(lgfx::LGFXBase& gfx, int cx, int cy, uint16_t color) {
-  const int gh = theme::kGlyphHalfHeight;
-  const int bar = theme::kGlyphPauseBarWidth;
-  const int gap = theme::kGlyphPauseBarGap;
-  const int x0 = cx - (bar * 2 + gap) / 2;
-  gfx.fillRect(x0, cy - gh, bar, gh * 2, color);
-  gfx.fillRect(x0 + bar + gap, cy - gh, bar, gh * 2, color);
+bool inTri(const Tri& t, float px, float py) {
+  const float d0 = edgeFn(t.x0, t.y0, t.x1, t.y1, px, py);
+  const float d1 = edgeFn(t.x1, t.y1, t.x2, t.y2, px, py);
+  const float d2 = edgeFn(t.x2, t.y2, t.x0, t.y0, px, py);
+  const bool neg = d0 < 0.0f || d1 < 0.0f || d2 < 0.0f;
+  const bool pos = d0 > 0.0f || d1 > 0.0f || d2 > 0.0f;
+  return !(neg && pos);
 }
 
-/** One triangle and an end bar: |< for previous, >| for next.
- *
- *  The triangle is the play glyph's, the same height and the same one and a
- *  half half-widths long, so the three transport buttons read as one set.
- *
- *  Both directions are laid out inside the same bounding box and differ only
- *  in which end each piece occupies, which is what makes the two buttons exact
- *  mirrors of each other. Getting that wrong is easy and was: walking outward
- *  from the centre in the glyph's own direction put the backward bar past the
- *  right-hand edge instead of at the left one, so "previous" drew as <| and
- *  sat three pixels right of the button it was centred in. */
-void drawSkipGlyph(lgfx::LGFXBase& gfx, int cx, int cy, bool forward,
-                   uint16_t color) {
-  const int gh = theme::kGlyphHalfHeight;
-  const int gw = theme::kGlyphHalfWidth;
-  const int triangle = gw + gw / 2;  // as drawPlayGlyph()
-  const int bar = theme::kGlyphSkipBarWidth;
-  const int total = triangle + theme::kGlyphSkipBarGap + bar;
-
-  // One box for both directions. Sized from total - 1 because a span of N
-  // pixels starting at `left` ends at left + N - 1.
-  const int left = cx - (total - 1) / 2;
-  const int right = left + total - 1;
-
-  // The bar marks the end the triangle points towards.
-  gfx.fillRect(forward ? right - bar + 1 : left, cy - gh, bar, gh * 2, color);
-
-  // The triangle's base is at the far end from the bar, its apex towards it.
-  const int base = forward ? left : right;
-  const int apex = base + (forward ? triangle : -triangle);
-  gfx.fillTriangle(base, cy - gh, base, cy + gh, apex, cy, color);
-}
-
-void drawTransportButton(lgfx::LovyanGFX& gfx, const Button& button,
-                         const PlayerState& state, bool pressed, bool enabled) {
-  const uint16_t fill = pressed ? theme::kSurfaceRaised : theme::kSurface;
-  const uint16_t glyph = enabled ? theme::kTextPrimary : theme::kTextMuted;
-  const int cy = button.cy;
-
-  gfx.fillCircle(button.cx, cy, button.radius, fill);
-  gfx.drawCircle(button.cx, cy, button.radius,
-                 pressed ? ui::cover::highlight(theme::kAccent)
-                         : theme::kTextMuted);
-
-  switch (button.action) {
-    case Action::kPrevious:
-      drawSkipGlyph(gfx, button.cx, cy, false, glyph);
-      break;
-    case Action::kNext:
-      drawSkipGlyph(gfx, button.cx, cy, true, glyph);
-      break;
+Shape glyphShape(Action action, bool playing, float cx, float cy, float h) {
+  Shape s;
+  switch (action) {
     case Action::kPlayPause:
-      if (isPlaying(state)) {
-        drawPauseGlyph(gfx, button.cx, cy, glyph);
+      if (playing) {
+        const float bar = 0.56f * h;
+        const float gap = 0.48f * h;
+        const float x0 = cx - (2.0f * bar + gap) * 0.5f;
+        s.rect[0] = {x0, cy - h, x0 + bar, cy + h};
+        s.rect[1] = {x0 + bar + gap, cy - h, x0 + 2.0f * bar + gap, cy + h};
+        s.rects = 2;
       } else {
-        drawPlayGlyph(gfx, button.cx, cy, glyph);
+        // A triangle's visual centre sits behind its box's: nudge it right.
+        const float w = 1.73f * h;
+        const float x0 = cx - w * 0.5f + w * 0.08f;
+        s.tri[0] = {x0, cy - h, x0, cy + h, x0 + w, cy};
+        s.tris = 1;
       }
       break;
+    case Action::kNext:
+    case Action::kPrevious: {
+      const float w = 1.1f * h;
+      const float overlap = 0.05f * h;
+      const float total = 2.0f * w - overlap;
+      if (action == Action::kNext) {
+        const float x0 = cx - total * 0.5f;
+        const float x1 = x0 + w - overlap;
+        s.tri[0] = {x0, cy - h, x0, cy + h, x0 + w, cy};
+        s.tri[1] = {x1, cy - h, x1, cy + h, x1 + w, cy};
+      } else {
+        const float x0 = cx + total * 0.5f;
+        const float x1 = x0 - w + overlap;
+        s.tri[0] = {x0, cy - h, x0, cy + h, x0 - w, cy};
+        s.tri[1] = {x1, cy - h, x1, cy + h, x1 - w, cy};
+      }
+      s.tris = 2;
+      break;
+    }
     default:
       break;
   }
+  return s;
 }
 
-// --- Volume slider ----------------------------------------------------------
+constexpr int kMaskSide = 2 * theme::kNpPlayHalfHeight + 24;
+uint8_t s_mask[kMaskSide * kMaskSide];
+
+void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
+               bool enabled) {
+  int bx, by, bw, bh;
+  glyphBox(b, bx, by, bw, bh);
+  if (bw > kMaskSide || bh > kMaskSide) {
+    return;
+  }
+  const Shape s = glyphShape(b.action, isPlaying(state), b.cx + 0.5f,
+                             b.cy + 0.5f, static_cast<float>(b.half));
+  for (int my = 0; my < bh; ++my) {
+    for (int mx = 0; mx < bw; ++mx) {
+      int hits = 0;
+      for (int sy = 0; sy < 4; ++sy) {
+        const float py = by + my + (sy + 0.5f) * 0.25f;
+        for (int sx = 0; sx < 4; ++sx) {
+          const float px = bx + mx + (sx + 0.5f) * 0.25f;
+          bool in = false;
+          for (int i = 0; i < s.tris && !in; ++i) {
+            in = inTri(s.tri[i], px, py);
+          }
+          for (int i = 0; i < s.rects && !in; ++i) {
+            in = px >= s.rect[i].x0 && px < s.rect[i].x1 &&
+                 py >= s.rect[i].y0 && py < s.rect[i].y1;
+          }
+          hits += in ? 1 : 0;
+        }
+      }
+      s_mask[my * bw + mx] = static_cast<uint8_t>(hits * 255 / 16);
+    }
+  }
+  // Pressed reads as the glyph dimming under the finger, as on Apple's.
+  const uint16_t color = !enabled ? theme::kTextMuted
+                         : pressed ? 0x8C71  // #8E8E93
+                                   : theme::kTextPrimary;
+  paint::mask(bx, by, bw, bh, s_mask, color);
+}
+
+// --- Volume ring ------------------------------------------------------------
 
 /** Point on the arc's centreline at `fraction` along it, in frame coords. */
 void volumePoint(float fraction, int& x, int& y) {
@@ -281,48 +333,40 @@ void saveArcBackdrop(lgfx::LovyanGFX& gfx) {
   s_arc_backdrop_valid = true;
 }
 
-void drawVolumeArc(lgfx::LovyanGFX& gfx, const PlayerState& state, float level) {
-  if (level < 0.0f) {
-    level = 0.0f;
-  } else if (level > 1.0f) {
-    level = 1.0f;
-  }
-
-  const int cy = theme::kCenterY;
-
-  gfx.fillArc(theme::kCenterX, cy, theme::kVolumeArcInnerRadius,
-              theme::kVolumeArcOuterRadius, theme::kVolumeArcStartDeg,
-              theme::kVolumeArcEndDeg, theme::kArcTrack);
-
-  // level is the HA volume_level, 0..1 -- 0.72 is 72% and fills 0.72 of the
-  // 252 degree sweep, i.e. 181 degrees from the lower left, putting the knob
-  // at roughly two o'clock.
-  const float filled_end =
-      theme::kVolumeArcStartDeg + theme::kVolumeArcSweepDeg * level;
+void drawVolumeArc(const PlayerState& state, float level,
+                   const paint::Clip* clip) {
+  level = level < 0.0f ? 0.0f : level > 1.0f ? 1.0f : level;
+  const float r =
+      (theme::kVolumeArcInnerRadius + theme::kVolumeArcOuterRadius) / 2.0f;
+  const float half =
+      (theme::kVolumeArcOuterRadius - theme::kVolumeArcInnerRadius) / 2.0f;
+  const float cx = theme::kCenterX;
+  const float cy = theme::kCenterY;
+  // The track is white at a fifth, so it takes the cover's colour under it.
+  paint::arc(cx, cy, r, half, theme::kVolumeArcStartDeg,
+             theme::kVolumeArcEndDeg, 0xFFFF, 52, clip);
   // Grey when nothing will be heard at that level: muted, or the volume
   // device switched off.
   const uint16_t fill = state.muted || state.control_off
                             ? theme::kVolumeMutedFill
                             : theme::kVolumeFill;
-  if (filled_end > theme::kVolumeArcStartDeg + 0.5f) {
-    gfx.fillArc(theme::kCenterX, cy, theme::kVolumeArcInnerRadius,
-                theme::kVolumeArcOuterRadius, theme::kVolumeArcStartDeg,
-                filled_end, fill);
+  const float filled_end =
+      theme::kVolumeArcStartDeg + theme::kVolumeArcSweepDeg * level;
+  if (level > 0.004f) {
+    paint::arc(cx, cy, r, half, theme::kVolumeArcStartDeg, filled_end, fill,
+               255, clip);
   }
-
   // The knob is what makes it read as draggable rather than as a readout.
-  int knob_x = 0;
-  int knob_y = 0;
-  volumePoint(level, knob_x, knob_y);
-  gfx.fillCircle(knob_x, knob_y, theme::kVolumeKnobRadius, fill);
-  gfx.drawCircle(knob_x, knob_y, theme::kVolumeKnobRadius,
-                 theme::kBackground);
+  constexpr float kRad = 3.14159265f / 180.0f;
+  paint::disc(cx + cosf(filled_end * kRad) * r,
+              cy + sinf(filled_end * kRad) * r, theme::kVolumeKnobRadius, fill,
+              255, clip);
 }
 
-// --- Elapsed / total chip ---------------------------------------------------
+// --- Scrubber and times -----------------------------------------------------
 
-/** Where the chip is while it says the token was rejected, for a tap there
- *  to link again; not shown otherwise. Set each time the chip is drawn. */
+/** Where the line under the scrubber is while it says the token was
+ *  rejected, for a tap there to link again; not shown otherwise. */
 struct ChipBox {
   bool shown = false;
   int left = 0;
@@ -331,40 +375,26 @@ struct ChipBox {
   int height = 0;
 };
 ChipBox s_relink_chip;
-/** A finger's worth around it: the pill is small. */
+/** A finger's worth around it. */
 constexpr int kRelinkHitPad = theme::px(8);
 
-/** Formats "1:23 / 4:56", or leaves `out` empty when there is no duration. */
-void formatElapsed(const PlayerState& state, char* out, size_t out_len) {
-  out[0] = '\0';
-  // Offline, the time would run on from a state that may be long stale: the
-  // chip says why instead.
+/** What the times line says instead of times, or nullptr: offline (the time
+ *  would run on from a stale state), and the lock. `warn` when it is a state
+ *  to act on. */
+const char* timesMessage(const PlayerState& state, bool& warn) {
+  warn = true;
   if (state.offline) {
-    snprintf(out, out_len, "%s",
-             services::ha::tokenRejected() ? "Token rejected" : "Offline");
-    return;
+    return services::ha::tokenRejected() ? "Token rejected" : "Offline";
   }
-  // Locked, the chip says so, and for a moment after a touch, how to unlock.
   if (state.locked) {
-    snprintf(out, out_len, "%s",
-             state.lock_hint ? "Hold both buttons" : "Locked");
-    return;
+    warn = state.lock_hint;
+    return state.lock_hint ? "Hold both buttons" : "Locked";
   }
-  const float position = services::ha::interpolatedPosition(state);
-  if (position < 0.0f || state.duration_s <= 0.0f) {
-    return;
-  }
-  char elapsed[12];
-  char total[12];
-  text::formatDuration(position, elapsed, sizeof(elapsed));
-  text::formatDuration(state.duration_s, total, sizeof(total));
-  snprintf(out, out_len, "%s / %s", elapsed, total);
+  return nullptr;
 }
 
-// --- Track progress ---------------------------------------------------------
-
-/** How far through the track, 0..1, or -1 when there is nothing to show:
- *  the times formatElapsed() would leave out, and offline. */
+/** How far through the track, 0..1, or -1 when there is nothing to show: no
+ *  duration, no position, or offline. */
 float progressFraction(const PlayerState& state) {
   if (state.offline || state.duration_s <= 0.0f) {
     return -1.0f;
@@ -377,127 +407,126 @@ float progressFraction(const PlayerState& state) {
   return f < 0.0f ? 0.0f : f > 1.0f ? 1.0f : f;
 }
 
-/** The progress arc: the volume arc's ring, in the gap at its foot, filling
- *  from the lower left. Opaque and always the same shape, so it can be
- *  painted over itself once a second without the backdrop; the elapsed chip
- *  goes over it after. */
-void drawProgressArc(lgfx::LovyanGFX& gfx, const PlayerState& state) {
+constexpr int kScrubLeft = theme::kCenterX - theme::kNpScrubHalfWidth;
+constexpr int kScrubWidth = 2 * theme::kNpScrubHalfWidth;
+
+/** The band the scrubber and its times repaint in, once a second: inside the
+ *  volume ring at those rows, clear of the glyphs below. */
+constexpr int kBandHalfWidth = theme::px(92);
+constexpr int kBandTop = theme::kNpScrubY - theme::px(6);
+constexpr int kBandBottom = theme::kNpTimesY + theme::px(10);
+
+void drawScrubber(lgfx::LovyanGFX& gfx, const PlayerState& state) {
+  s_relink_chip.shown = false;
   const float f = progressFraction(state);
+  const float h = theme::kNpScrubHeight;
+  const float y = theme::kNpScrubY - h / 2.0f;
+  if (f >= 0.0f) {
+    paint::roundRect(kScrubLeft, y, kScrubWidth, h, h / 2.0f, 0xFFFF, 64);
+    const float filled = std::max(h, kScrubWidth * f);
+    paint::roundRect(kScrubLeft, y, filled, h, h / 2.0f, 0xFFFF, 240);
+  }
+
+  displayFontApplyHeight(gfx, theme::kNpTimesTextPx);
+  bool warn = false;
+  if (const char* message = timesMessage(state, warn)) {
+    char line[text::kMaxLineLen];
+    text::ellipsize(gfx, message, 2 * kBandHalfWidth, line, sizeof(line));
+    gfx.setTextDatum(textdatum_t::middle_center);
+    gfx.setTextColor(warn ? theme::kWarning : theme::kTextSecondary);
+    gfx.drawString(line, theme::kCenterX, theme::kNpTimesY);
+    if (state.offline && services::ha::tokenRejected()) {
+      const int w = gfx.textWidth(line);
+      const int th = gfx.fontHeight();
+      s_relink_chip = {true, theme::kCenterX - w / 2, theme::kNpTimesY - th / 2,
+                       w, th};
+    }
+    return;
+  }
   if (f < 0.0f) {
     return;
   }
-  gfx.fillArc(theme::kCenterX, theme::kCenterY, theme::kVolumeArcInnerRadius,
-              theme::kVolumeArcOuterRadius, theme::kProgressArcStartDeg,
-              theme::kProgressArcEndDeg, theme::kArcTrack);
-  const float filled_from =
-      theme::kProgressArcEndDeg -
-      (theme::kProgressArcEndDeg - theme::kProgressArcStartDeg) * f;
-  if (filled_from < theme::kProgressArcEndDeg - 0.5f) {
-    gfx.fillArc(theme::kCenterX, theme::kCenterY,
-                theme::kVolumeArcInnerRadius, theme::kVolumeArcOuterRadius,
-                filled_from, theme::kProgressArcEndDeg,
-                ui::cover::highlight(theme::kProgressFill));
-  }
+  const float position = services::ha::interpolatedPosition(state);
+  char elapsed[12];
+  char remaining[14];
+  text::formatDuration(position, elapsed, sizeof(elapsed));
+  remaining[0] = '-';
+  text::formatDuration(std::max(0.0f, state.duration_s - position),
+                       remaining + 1, sizeof(remaining) - 1);
+  gfx.setTextColor(theme::kTextSecondary);
+  gfx.setTextDatum(textdatum_t::middle_left);
+  gfx.drawString(elapsed, kScrubLeft, theme::kNpTimesY);
+  gfx.setTextDatum(textdatum_t::middle_right);
+  gfx.drawString(remaining, kScrubLeft + kScrubWidth, theme::kNpTimesY);
 }
 
-/** The top of the rows the progress arc reaches: its two ends, at the inner
- *  radius, are its highest points. */
-int progressArcTopY() {
-  constexpr float kRad = 3.14159265f / 180.0f;
-  return theme::kCenterY +
-         static_cast<int>(sinf(theme::kProgressArcStartDeg * kRad) *
-                          theme::kVolumeArcInnerRadius) -
-         theme::px(2);
-}
-
-void drawElapsedChip(lgfx::LovyanGFX& gfx, const PlayerState& state) {
-  char label[32];
-  s_relink_chip.shown = false;
-  formatElapsed(state, label, sizeof(label));
-  if (label[0] == '\0') {
-    return;
-  }
-
-  displayFontApplyHeight(gfx, theme::kElapsedTextPx);
-  gfx.setTextDatum(textdatum_t::middle_center);
-
-  const int text_w = gfx.textWidth(label);
-  const int text_h = gfx.fontHeight();
-  const int w = text_w + 2 * theme::kElapsedPillPadX;
-  const int h = text_h + 2 * theme::kElapsedPillPadY;
-  if (state.offline && services::ha::tokenRejected()) {
-    s_relink_chip = {true, theme::kCenterX - w / 2, theme::kElapsedY - h / 2,
-                     w, h};
-  }
-
-  gfx.fillRoundRect(theme::kCenterX - w / 2, theme::kElapsedY - h / 2, w,
-                    h, theme::kElapsedPillRadius, theme::kSurface);
-  gfx.setTextColor(state.offline || state.lock_hint ? theme::kWarning
-                                                    : theme::kTextSecondary);
-  gfx.drawString(label, theme::kCenterX, theme::kElapsedY);
-}
-
-// --- Text -------------------------------------------------------------------
-
-/** The rows the glow covers: from above the artist to below a two-line
- *  title, with room for the blur to spread both ways. See ui/text_glow.h. */
-constexpr int kGlowTop =
-    theme::kSubtitleY - theme::kSubtitleTextPx / 2 - ui::glow::kMargin;
-constexpr int kGlowBottom =
-    theme::kTitleBlockCenterY +
-    ((theme::kTitleMaxLines - 1) * theme::kTitleLineHeight) / 2 +
-    theme::kTitleTextPx / 2 + ui::glow::kMargin;
+// --- Title and artist -------------------------------------------------------
 
 /** The track text as laid out once, so the glow and the text share it. */
 struct TrackText {
   char lines[theme::kTitleMaxLines][text::kMaxLineLen] = {};
   int count = 0;
-  char subtitle[text::kMaxLineLen] = {};
+  char artist[text::kMaxLineLen] = {};
+  int title_y = 0;   // centre of the first title line
+  int artist_y = 0;  // centre of the artist line
 };
+
+/** Title, then artist, as a block centred in the band between the cover and
+ *  the scrubber, so one- and two-line titles sit in the same optical place. */
+void layoutTrackText(lgfx::LGFXBase& gfx, const PlayerState& state,
+                     TrackText& text) {
+  const bool has_title = state.title[0] != '\0';
+  const int mid = (theme::kNpTextTop + theme::kNpTextBottom) / 2;
+  const int width = std::min(theme::usableWidthAt(mid, theme::kTextEdgeInset),
+                             theme::px(196));
+  displayFontApplyHeight(gfx, theme::kNpTitleTextPx);
+  text.count = text::wrap(gfx, has_title ? state.title : idleLabel(state),
+                          width, theme::kTitleMaxLines, text.lines);
+  if (state.subtitle[0] != '\0') {
+    displayFontApplyHeight(gfx, theme::kNpArtistTextPx);
+    text::ellipsize(gfx, state.subtitle, width, text.artist,
+                    sizeof(text.artist));
+  }
+  const int title_h = text.count * theme::kNpTitleLineHeight;
+  const int artist_h = text.artist[0] != '\0'
+                           ? theme::kNpArtistGap + theme::kNpArtistTextPx
+                           : 0;
+  const int top = mid - (title_h + artist_h) / 2;
+  text.title_y = top + theme::kNpTitleLineHeight / 2;
+  text.artist_y = top + title_h + theme::kNpArtistGap +
+                  theme::kNpArtistTextPx / 2;
+}
 
 /** Draw `text` onto `gfx`, `dy` rows up from where it sits on the frame. With
  *  `mask`, everything in white, for the glow. */
 void drawTrackLines(lgfx::LGFXBase& gfx, const TrackText& text, int dy,
                     bool mask) {
   gfx.setTextDatum(textdatum_t::middle_center);
-  displayFontApplyHeight(gfx, theme::kTitleTextPx);
+  displayFontApplyHeight(gfx, theme::kNpTitleTextPx);
   gfx.setTextColor(theme::kTextPrimary);
-  // Centre the block of lines on kTitleBlockCenterY rather than growing down
-  // from it, so one- and two-line titles both sit in the same optical place.
-  const int block_top = theme::kTitleBlockCenterY -
-                        ((text.count - 1) * theme::kTitleLineHeight) / 2;
   for (int i = 0; i < text.count; ++i) {
     gfx.drawString(text.lines[i], theme::kCenterX,
-                   block_top + i * theme::kTitleLineHeight - dy);
+                   text.title_y + i * theme::kNpTitleLineHeight - dy);
   }
-  if (text.subtitle[0] != '\0') {
-    displayFontApplyHeight(gfx, theme::kSubtitleTextPx);
+  if (text.artist[0] != '\0') {
+    displayFontApplyHeight(gfx, theme::kNpArtistTextPx);
     gfx.setTextColor(mask ? theme::kTextPrimary : theme::kTextSecondary);
-    gfx.drawString(text.subtitle, theme::kCenterX, theme::kSubtitleY - dy);
+    gfx.drawString(text.artist, theme::kCenterX, text.artist_y - dy);
   }
 }
 
+/** The rows the glow covers: the text band, with room for the blur to
+ *  spread both ways. See ui/text_glow.h. */
+constexpr int kGlowTop = theme::kNpTextTop - ui::glow::kMargin;
+constexpr int kGlowBottom = theme::kNpTextBottom + ui::glow::kMargin;
+
 void drawTrackText(lgfx::LovyanGFX& gfx, const PlayerState& state,
                    bool over_art) {
-  const bool has_title = state.title[0] != '\0';
-  if (!has_title && state.hold_label) {
+  if (state.title[0] == '\0' && state.hold_label) {
     return;  // most likely between tracks: blank, not "Nothing playing"
   }
-
   TrackText text;
-  displayFontApplyHeight(gfx, theme::kTitleTextPx);
-  text.count = text::wrap(
-      gfx, has_title ? state.title : idleLabel(state),
-      theme::usableWidthAt(theme::kTitleBlockCenterY, theme::kTextEdgeInset),
-      theme::kTitleMaxLines, text.lines);
-  if (state.subtitle[0] != '\0') {
-    displayFontApplyHeight(gfx, theme::kSubtitleTextPx);
-    text::ellipsize(
-        gfx, state.subtitle,
-        theme::usableWidthAt(theme::kSubtitleY, theme::kTextEdgeInset),
-        text.subtitle, sizeof(text.subtitle));
-  }
-
+  layoutTrackText(gfx, state, text);
   // Only over art: on the plain backdrop there is nothing to stand out from.
   if (over_art) {
     if (auto* mask = ui::glow::begin(kGlowTop, kGlowBottom - kGlowTop)) {
@@ -506,13 +535,6 @@ void drawTrackText(lgfx::LovyanGFX& gfx, const PlayerState& state,
     }
   }
   drawTrackLines(gfx, text, 0, false);
-}
-
-/** Backdrop when there is no art: a flat surface, so the text still reads. */
-void drawPlainBackdrop(lgfx::LovyanGFX& gfx) {
-  gfx.fillScreen(theme::kBackground);
-  gfx.fillCircle(theme::kCenterX, theme::kCenterY, theme::kRadius,
-                 theme::kSurface);
 }
 
 /** What the kept frame with the track text on it shows: the cover under it
@@ -547,39 +569,42 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
              bool controls = true) {
   displayFontEnsureLoaded(gfx);
 
-  // The cover, its scrim and the track text over them, kept from the last
-  // compose while they are the same: they are most of a repaint's cost -- a
-  // decode, a full-frame dim and a blur -- and a play, a pause or a volume
-  // step touches none of them. Two frames, so a title that changes over the
-  // same cover -- a radio stream -- redraws only the text.
+  // The cover, its blurred ground and the track text over them, kept from the
+  // last compose while they are the same: they are most of a repaint's cost
+  // -- a decode and a full-frame blur -- and a play, a pause or a volume step
+  // touches none of them. Two frames, so a title that changes over the same
+  // cover -- a radio stream -- redraws only the text.
   const bool has_art = ui::cover::hasArt();
   const uint32_t art = has_art ? ui::cover::identity() : 0;
   const uint32_t with_text = trackTextKey(art, has_art, state);
   bool over_art = has_art;
-  if (!ui::canvasRestoreBackdrop(ui::Backdrop::kArtAndText, with_text)) {
+  if (ui::canvasRestoreBackdrop(ui::Backdrop::kArtAndText, with_text)) {
+    s_text_key = with_text;
+    s_text_key_valid = true;
+  } else {
     over_art = has_art && ui::canvasRestoreBackdrop(ui::Backdrop::kArt, art);
     if (!over_art && has_art) {
       gfx.fillScreen(theme::kBackground);
-      // (0, 0) is the top-left of the fit box, which is the whole panel; the
-      // middle_center datum positions the art inside it.
-      over_art = ui::cover::draw(gfx, 0, 0, theme::kSize);
+      over_art = ui::cover::draw(gfx, theme::kNpCoverX, theme::kNpCoverY,
+                                 theme::kNpCoverSize);
       if (over_art) {
-        // Art is the backdrop, so everything above it needs a scrim: a flat
-        // dim for the whole frame, plus a stronger ramp under the text and
-        // transport row where contrast matters most.
-        ui::scrim(theme::kScrimBaseAlpha, theme::kScrimGradientTop,
-                  theme::kScrimGradientAlpha);
+        paint::coverBackdrop(theme::kNpCoverX, theme::kNpCoverY,
+                             theme::kNpCoverSize, theme::kNpCoverRadius);
         ui::canvasSaveBackdrop(ui::Backdrop::kArt, art);
       }
     }
     if (!over_art) {
-      drawPlainBackdrop(gfx);
+      gfx.fillScreen(theme::kBackground);
+      paint::plainBackdrop(theme::kNpCoverX, theme::kNpCoverY,
+                           theme::kNpCoverSize, theme::kNpCoverRadius);
     }
     drawTrackText(gfx, state, over_art);
     // Kept only as what it was asked to be: art that would not draw this
     // time is tried again next time rather than remembered as a plain frame.
-    if (over_art == has_art) {
+    s_text_key_valid = over_art == has_art;
+    if (s_text_key_valid) {
       ui::canvasSaveBackdrop(ui::Backdrop::kArtAndText, with_text);
+      s_text_key = with_text;
     }
   }
   // Standby is the cover and the track text alone: no controls to touch.
@@ -587,22 +612,19 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
     s_arc_backdrop_valid = false;
     return;
   }
-  // Before the volume arc's backdrop is kept, so that copy agrees with it
-  // wherever the two might meet.
-  drawProgressArc(gfx, state);
-  drawElapsedChip(gfx, state);
+  drawScrubber(gfx, state);
+  // Before the arc's backdrop is kept, so that copy agrees with it wherever
+  // the two might meet.
+  for (const Action action :
+       {Action::kPrevious, Action::kPlayPause, Action::kNext}) {
+    drawGlyph(buttonFor(action), state, false, enabledFor(action, state));
+  }
   if (volumeAvailable(state)) {
     saveArcBackdrop(gfx);
-    drawVolumeArc(gfx, state, state.volume);
+    drawVolumeArc(state, state.volume, nullptr);
     s_arc_drawn_level = state.volume;
   } else {
     s_arc_backdrop_valid = false;
-  }
-
-  for (const Action action :
-       {Action::kPrevious, Action::kPlayPause, Action::kNext}) {
-    drawTransportButton(gfx, buttonFor(action), state, false,
-                        enabledFor(action, state));
   }
   ui::peers_chip::draw(gfx, state);
 }
@@ -615,57 +637,39 @@ void composeStandby(const PlayerState& state) {
 
 void draw(const PlayerState& state) {
   s_last_drawn = state;
-
-  // One pass, decoding the cover art once. main.cpp still only recomposes
-  // when something visible actually changed, because that decode is the
-  // expensive part of a frame and position alone does not change the picture.
   compose(ui::canvas(), state);
   ui::canvasPresent();
 }
 
 void refreshElapsed(const PlayerState& state) {
-  // Straight to the panel. The chip carries its own opaque pill, so repainting
-  // it needs nothing from the cover art beneath -- which is the whole reason
-  // it is a chip and not bare text on the scrim. The progress arc is opaque
-  // too and keeps its shape, so it goes first, under the chip.
-  drawProgressArc(ui::panel(), state);
-  drawElapsedChip(ui::panel(), state);
-  if (!board::kPanelWritesDirect) {
-    // ui::panel() is the composed frame on a framebuffer panel, so the chip
-    // and the arc are not on the glass until their band is pushed: from the
-    // arc's ends to the foot of the panel, all of its width -- the pill is
-    // centred and changes width with its label, and a band a few dozen rows
-    // tall costs nothing worth narrowing.
-    const int top = std::min(progressArcTopY(),
-                             theme::kElapsedY - theme::px(14));
-    ui::canvasPresentRegion(0, top, theme::kSize, theme::kSize - top);
+  // Put back the band from the kept cover-and-text frame and draw the second
+  // over it. With nothing kept there is no clean ground to draw on: the line
+  // waits for the next compose rather than smearing its own last second.
+  const int x = theme::kCenterX - kBandHalfWidth;
+  const int w = 2 * kBandHalfWidth;
+  const int h = kBandBottom - kBandTop;
+  if (!s_text_key_valid ||
+      !ui::canvasRestoreBackdropRegion(ui::Backdrop::kArtAndText, s_text_key,
+                                       x, kBandTop, w, h)) {
     return;
   }
-  // And into the canvas, where that is not the panel, so it keeps up there
-  // too. A volume drag presents stretches of the canvas, and near either end
-  // of the arc a stretch reaches the chip -- which the canvas would otherwise
-  // still show at the time it was composed, torn against the live one.
-  if (ui::canvasReady()) {
-    drawProgressArc(ui::canvas(), state);
-    drawElapsedChip(ui::canvas(), state);
-  }
+  drawScrubber(ui::canvas(), state);
+  ui::canvasPresentRegion(x, kBandTop, w, h);
 }
 
 void refreshVolume(const PlayerState& state, float level) {
   if (!s_arc_backdrop_valid || s_arc_drawn_level < 0.0f) {
     // No copy of what is under the ring. Draw over it and let the next
-    // compose clean up; the trail stays until then.
-    drawVolumeArc(ui::panel(), state, level);
-    if (!board::kPanelWritesDirect) {
-      ui::canvasPresent();  // the frame, which is all ui::panel() reached
-    }
+    // compose clean up.
+    drawVolumeArc(state, level, nullptr);
+    ui::canvasPresent();
     return;
   }
 
   // Rebuild the stretch of ring between where the knob was and where it is
-  // going, knobs included, in the canvas -- and push only that. Bounded by
-  // walking the arc between the two levels, since a stretch of it can bulge
-  // well outside the box its two ends make.
+  // going, in the canvas -- and push only that. Bounded by walking the arc
+  // between the two levels, since a stretch of it can bulge well outside the
+  // box its two ends make.
   const float from = s_arc_drawn_level < level ? s_arc_drawn_level : level;
   const float to = s_arc_drawn_level < level ? level : s_arc_drawn_level;
   int x0 = theme::kSize;
@@ -691,7 +695,7 @@ void refreshVolume(const PlayerState& state, float level) {
   const int h = y1 - y0 + 1;
 
   // Only the ring was kept, and only the ring needs putting back: the arc and
-  // the knob never draw outside it.
+  // the knob never draw outside it, and nothing else sits in it.
   lgfx::LovyanGFX& gfx = ui::canvas();
   int spans[2][2];
   for (int row = y0; row <= y1; ++row) {
@@ -706,16 +710,8 @@ void refreshVolume(const PlayerState& state, float level) {
       }
     }
   }
-  gfx.setClipRect(x0, y0, w, h);
-  drawVolumeArc(gfx, state, level);
-  // The buttons went on after the arc, so they come back after it too, in
-  // case the box reached one.
-  for (const Action action :
-       {Action::kPrevious, Action::kPlayPause, Action::kNext}) {
-    drawTransportButton(gfx, buttonFor(action), s_last_drawn, false,
-                        enabledFor(action, s_last_drawn));
-  }
-  gfx.clearClipRect();
+  const paint::Clip clip{x0, y0, w, h};
+  drawVolumeArc(state, level, &clip);
   ui::canvasPresentRegion(x0, y0, w, h);
   s_arc_drawn_level = level;
 }
@@ -752,51 +748,25 @@ bool volumeSwipeRegion(int x, int y) {
   return y < theme::kCenterY;
 }
 
-namespace {
-
-/** (x, y)'s angle round the centre in LovyanGFX's terms: 0 at three
- *  o'clock, clockwise, 0..360. */
-float angleOf(int x, int y) {
-  constexpr float kDeg = 180.0f / 3.14159265f;
-  float a = atan2f(static_cast<float>(y - theme::kCenterY),
-                   static_cast<float>(x - theme::kCenterX)) *
-            kDeg;
-  return a < 0.0f ? a + 360.0f : a;
-}
-
-}  // namespace
-
 bool seekRegion(int x, int y, const PlayerState& state) {
   if (progressFraction(state) < 0.0f ||
       (state.supported_features & services::ha::kFeatureSeek) == 0) {
     return false;
   }
-  const int dx = x - theme::kCenterX;
-  const int dy = y - theme::kCenterY;
-  const int inside = theme::kVolumeArcInnerRadius - theme::kSeekBandInsideArc;
-  if (dx * dx + dy * dy < inside * inside) {
-    return false;
-  }
-  const float a = angleOf(x, y);
-  return a >= theme::kProgressArcStartDeg - theme::kSeekBandSlackDeg &&
-         a <= theme::kProgressArcEndDeg + theme::kSeekBandSlackDeg;
+  return y >= theme::kNpScrubY - theme::kNpSeekBandHalf &&
+         y <= theme::kNpScrubY + theme::kNpSeekBandHalf &&
+         x >= kScrubLeft - theme::kNpSeekBandHalf &&
+         x <= kScrubLeft + kScrubWidth + theme::kNpSeekBandHalf;
 }
 
 float seekFraction(int x, int y) {
-  // The arc fills from its lower-left end, kProgressArcEndDeg, towards its
-  // lower-right one: 0 at the left, 1 at the right. Past either end -- up
-  // the left side or the right -- holds at that end.
-  const float a = angleOf(x, y);
-  if (a >= 270.0f) {
-    return 1.0f;
-  }
-  const float f = (theme::kProgressArcEndDeg - a) /
-                  (theme::kProgressArcEndDeg - theme::kProgressArcStartDeg);
+  (void)y;
+  const float f = static_cast<float>(x - kScrubLeft) / kScrubWidth;
   return f < 0.0f ? 0.0f : f > 1.0f ? 1.0f : f;
 }
 
 Action hitTest(int x, int y) {
-  // The Token rejected chip first: it is a control only while it says that.
+  // The Token rejected line first: it is a control only while it says that.
   if (s_relink_chip.shown && x >= s_relink_chip.left - kRelinkHitPad &&
       x <= s_relink_chip.left + s_relink_chip.width + kRelinkHitPad &&
       y >= s_relink_chip.top - kRelinkHitPad &&
@@ -804,12 +774,11 @@ Action hitTest(int x, int y) {
     return Action::kRelink;
   }
   // Nearest target wins rather than first-match, so a tap that lands between
-  // two buttons goes to the one it is actually closer to.
+  // two glyphs goes to the one it is actually closer to.
   constexpr int kHitRadiusSq =
-      theme::kTransportHitRadius * theme::kTransportHitRadius;
+      theme::kNpTransportHitRadius * theme::kNpTransportHitRadius;
   Action closest = Action::kNone;
   int closest_dist_sq = kHitRadiusSq + 1;
-
   for (const Action action :
        {Action::kPrevious, Action::kPlayPause, Action::kNext}) {
     const Button button = buttonFor(action);
@@ -825,20 +794,19 @@ Action hitTest(int x, int y) {
 }
 
 void showButtonPressed(Action action, bool pressed) {
-  if (action == Action::kNone) {
+  if (action == Action::kNone || action == Action::kRelink) {
     return;
   }
-  // The discs are opaque, so redrawing one over the composed frame needs
-  // nothing from the backdrop underneath it.
   const Button button = buttonFor(action);
-  drawTransportButton(ui::panel(), button, s_last_drawn, pressed,
-                      enabledFor(action, s_last_drawn));
-  if (!board::kPanelWritesDirect) {
-    // The frame, on a framebuffer panel: not on the glass until pushed.
-    const int edge = button.radius * 2 + 1;
-    ui::canvasPresentRegion(button.cx - button.radius,
-                            button.cy - button.radius, edge, edge);
+  int x, y, w, h;
+  glyphBox(button, x, y, w, h);
+  if (!s_text_key_valid ||
+      !ui::canvasRestoreBackdropRegion(ui::Backdrop::kArtAndText, s_text_key,
+                                       x, y, w, h)) {
+    return;
   }
+  drawGlyph(button, s_last_drawn, pressed, enabledFor(action, s_last_drawn));
+  ui::canvasPresentRegion(x, y, w, h);
 }
 
 }  // namespace ui::now_playing

@@ -90,6 +90,14 @@ void canvasSaveBackdrop(Backdrop which, uint32_t key);
 /** Put `which` back into the frame, if it is the one `key` names. False,
  *  leaving the frame alone, when what is kept is some other one or nothing. */
 bool canvasRestoreBackdrop(Backdrop which, uint32_t key);
+/** As canvasRestoreBackdrop(), for the rectangle at (x, y) only: what a small
+ *  repaint over the cover -- a glyph pressed, the scrubber's second -- puts
+ *  back before it draws, since none of it sits on an opaque shape. */
+bool canvasRestoreBackdropRegion(Backdrop which, uint32_t key, int x, int y,
+                                 int w, int h);
+
+/** True when the frame keeps RGB565 byte-swapped from the host's order. */
+bool canvasByteSwapped();
 
 /** The frame's pixels, when `gfx` is the canvas, laid out as
  *  canvasColorDepth() says; nullptr for anything else. For filling the frame

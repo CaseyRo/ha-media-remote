@@ -11,6 +11,7 @@
 #include "ui/back_button.h"
 #include "ui/canvas.h"
 #include "ui/text.h"
+#include "ui/paint.h"
 #include "ui/theme.h"
 
 namespace ui::browse_list {
@@ -174,7 +175,7 @@ void drawHeader(lgfx::LovyanGFX& gfx, int top, const char* title,
   }
   displayFontApplyHeight(gfx, theme::kListHeaderTextPx);
   gfx.setTextDatum(textdatum_t::middle_center);
-  gfx.setTextColor(theme::kAccent);
+  gfx.setTextColor(theme::kTextSecondary);
 
   char label[text::kMaxLineLen];
   text::ellipsize(gfx, title, text_half * 2, label, sizeof(label));
@@ -191,7 +192,7 @@ void drawItem(lgfx::LovyanGFX& gfx, int top, const services::browse::Row& row) {
   const int x = theme::kCenterX - half;
   const int w = half * 2;
 
-  gfx.fillRoundRect(x, y, w, theme::kListRowHeight, theme::kListRowRadius,
+  gfx.fillSmoothRoundRect(x, y, w, theme::kListRowHeight, theme::kListRowRadius,
                     theme::kSurface);
   // The longest single burst left in a compose: a full-width row fill is
   // over a hundred kilobytes in one call, longer than the backdrop ever goes
@@ -211,6 +212,10 @@ void drawItem(lgfx::LovyanGFX& gfx, int top, const services::browse::Row& row) {
     const int thumb_y = y + (theme::kListRowHeight - thumb) / 2;
     if (artwork::draw(artwork::Kind::kBrowse, row.item, gfx, thumb_x,
                       thumb_y)) {
+      // Apple's small rounding on the art, where the row is in the frame.
+      if (ui::canvasPixels(gfx) != nullptr) {
+        paint::roundCorners(thumb_x, thumb_y, thumb, theme::px(4), theme::kSurface);
+      }
       const int used = thumb_x + thumb + theme::kListThumbGap - text_x;
       text_x += used;
       text_w -= used;

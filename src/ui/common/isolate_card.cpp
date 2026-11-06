@@ -52,7 +52,7 @@ void drawLine(lgfx::LovyanGFX& gfx, const char* str, int x, int y,
 
 void drawButton(lgfx::LovyanGFX& gfx, int cx, int w, const char* label,
                 uint16_t fill, uint16_t color) {
-  gfx.fillRoundRect(cx - w / 2, kButtonY - kButtonHeight / 2, w,
+  gfx.fillSmoothRoundRect(cx - w / 2, kButtonY - kButtonHeight / 2, w,
                     kButtonHeight, kButtonHeight / 2, fill);
   drawLine(gfx, label, cx, kButtonY, theme::kListRowTextPx, color,
            w - 2 * theme::px(6));

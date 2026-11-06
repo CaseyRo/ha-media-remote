@@ -2,15 +2,18 @@
 
 #include <cstdio>
 
+#include "board/board.h"
 #include "hardware/display_font.h"
 #include "ui/theme.h"
 
 namespace ui::peers_chip {
 namespace {
 
-/** Below the volume -- clear of the round panel's arc and the square one's
- *  bar band -- and above the artist line, on both layouts. */
-constexpr int kChipY = theme::px(42);
+/** On the round panel, the line above the cover, as plain text: the cover
+ *  starts where the old chip sat. On the square one, below the volume bar
+ *  band and above the artist line, on a pill. */
+constexpr bool kPlain = board::kDisplayIsRound;
+constexpr int kChipY = kPlain ? theme::kNpTopLineY : theme::px(42);
 /** A finger's worth around the chip, which is small. */
 constexpr int kHitPad = theme::px(8);
 
@@ -45,7 +48,7 @@ void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
   }
   char label[24];
   if (off_here) {
-    snprintf(label, sizeof(label), "Off in this room");
+    snprintf(label, sizeof(label), kPlain ? "Off here" : "Off in this room");
   } else {
     snprintf(label, sizeof(label), "+%d room%s", state.peer_count,
              state.peer_count == 1 ? "" : "s");
@@ -60,9 +63,13 @@ void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
   s_height = text_h + 2 * theme::kElapsedPillPadY;
   s_left = theme::kCenterX - s_width / 2;
   s_top = kChipY - s_height / 2;
-  gfx.fillRoundRect(s_left, s_top, s_width, s_height,
-                    theme::kElapsedPillRadius, theme::kSurface);
-  gfx.setTextColor(off_here ? theme::kWarning : theme::kAccent);
+  if (!kPlain) {
+    gfx.fillSmoothRoundRect(s_left, s_top, s_width, s_height,
+                      theme::kElapsedPillRadius, theme::kSurface);
+  }
+  gfx.setTextColor(off_here ? theme::kWarning
+                   : kPlain ? theme::kTextSecondary
+                            : theme::kAccent);
   gfx.drawString(label, theme::kCenterX, kChipY);
 }
 

@@ -61,7 +61,7 @@ void drawRow(lgfx::LovyanGFX& gfx, int row, int top, bool pressed = false) {
   const int x = theme::kCenterX - half;
   const int w = half * 2;
   const int cy = top + theme::kListRowHeight / 2;
-  gfx.fillRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
+  gfx.fillSmoothRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
                     pressed ? theme::kAccent : theme::kSurface);
 
   displayFontApplyHeight(gfx, theme::kListRowTextPx);

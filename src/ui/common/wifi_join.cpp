@@ -120,7 +120,7 @@ void drawRow(lgfx::LovyanGFX& gfx, int row, int top) {
   const int cy = top + theme::kListRowHeight / 2;
 
   if (row >= s_count) {
-    gfx.fillRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
+    gfx.fillSmoothRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
                       theme::kSurface);
     displayFontApplyHeight(gfx, theme::kListRowTextPx);
     gfx.setTextDatum(textdatum_t::middle_center);
@@ -131,7 +131,7 @@ void drawRow(lgfx::LovyanGFX& gfx, int row, int top) {
 
   const WifiNetwork& n = s_networks[row];
   const bool current = s_current[0] != '\0' && strcmp(n.ssid, s_current) == 0;
-  gfx.fillRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
+  gfx.fillSmoothRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
                     current ? theme::kSurfaceRaised : theme::kSurface);
 
   // Signal at the right edge, the lock beside it.
@@ -304,7 +304,7 @@ const char* pageLabel(char key) {
 
 void drawKey(lgfx::LovyanGFX& gfx, char key, int x, int y, int w) {
   const bool lit = key == kShift && s_shift;
-  gfx.fillRoundRect(x, y, w, theme::kKeyHeight, theme::kKeyRadius,
+  gfx.fillSmoothRoundRect(x, y, w, theme::kKeyHeight, theme::kKeyRadius,
                     lit ? theme::kAccent : theme::kSurface);
   const int cx = x + w / 2;
   const int cy = y + theme::kKeyHeight / 2;
@@ -399,7 +399,7 @@ void drawKeyboard(lgfx::LovyanGFX& gfx) {
   const bool ready = strlen(s_password) >= kMinPassword;
   const int gx = theme::kCenterX - theme::kSearchGoWidth / 2;
   const int gy = theme::kSearchGoY - theme::kSearchGoHeight / 2;
-  gfx.fillRoundRect(gx, gy, theme::kSearchGoWidth, theme::kSearchGoHeight,
+  gfx.fillSmoothRoundRect(gx, gy, theme::kSearchGoWidth, theme::kSearchGoHeight,
                     theme::kKeyRadius, ready ? theme::kAccent : theme::kSurface);
   displayFontApplyHeight(gfx, theme::kKeyTextPx);
   gfx.setTextDatum(textdatum_t::middle_center);

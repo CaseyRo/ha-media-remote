@@ -75,6 +75,9 @@ changes the puck.
 
 - Reference Casey made binding: take inspiration from Music Assistant's
   frosted-glass web UI ("Apple-fy" the design).
+- Chosen 6 Nov 2026: the category standard played straight. The craft bar is
+  Apple Music, Apple Watch Now Playing and Music Assistant; the blurred cover
+  stays as the ground.
 - Names in use: Puck 1; the device's own name on the network is
   `media-remote`.
 

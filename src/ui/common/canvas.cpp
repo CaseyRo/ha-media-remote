@@ -331,6 +331,25 @@ bool canvasRestoreBackdrop(Backdrop which, uint32_t key) {
   return true;
 }
 
+bool canvasRestoreBackdropRegion(Backdrop which, uint32_t key, int x, int y,
+                                 int w, int h) {
+  uint16_t* buffer = s_ready ? frameBuffer() : nullptr;
+  const Kept& k = kept(which);
+  if (buffer == nullptr || !k.valid || k.key != key) {
+    return false;
+  }
+  if (!clipRect(x, y, w, h)) {
+    return true;  // nothing of it on the panel: nothing to put back
+  }
+  for (int row = y; row < y + h; ++row) {
+    const size_t at = static_cast<size_t>(row) * kSide + x;
+    memcpy(buffer + at, k.pixels + at, static_cast<size_t>(w) * sizeof(uint16_t));
+  }
+  return true;
+}
+
+bool canvasByteSwapped() { return s_swapped; }
+
 uint16_t* canvasPixels(const lgfx::LGFXBase& gfx) {
   if (!s_ready || &gfx != static_cast<const lgfx::LGFXBase*>(&s_frame)) {
     return nullptr;

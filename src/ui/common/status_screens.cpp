@@ -174,6 +174,16 @@ void statusScreenMessage(const char* title, const char* line1,
                          uint16_t foreground, uint8_t ways) {
   lgfx::LovyanGFX& gfx = ui::canvas();
   displayFontEnsureLoaded(gfx);
+  // Apple's way with an alert: black, the title in the state's colour and the
+  // detail in secondary grey, rather than a whole screen of yellow.
+  const bool alert = background == config::kColorYellow;
+  if (alert) {
+    background = config::kColorBlack;
+    foreground = ui::theme::kWarning;
+  }
+  const uint16_t detail = alert || foreground == config::kTextOnBlack
+                              ? ui::theme::kTextSecondary
+                              : foreground;
   gfx.fillScreen(background);
 
   // Stack the lines around the centre so a one-, two- or three-line card all
@@ -198,12 +208,12 @@ void statusScreenMessage(const char* title, const char* line1,
 
   if (line1 != nullptr && line1[0] != '\0') {
     y += gap + body_h / 2;
-    drawCentredLine(gfx, line1, y, ui::theme::kStatusBodyTextPx, foreground);
+    drawCentredLine(gfx, line1, y, ui::theme::kStatusBodyTextPx, detail);
     y += body_h / 2;
   }
   if (line2 != nullptr && line2[0] != '\0') {
     y += gap + body_h / 2;
-    drawCentredLine(gfx, line2, y, ui::theme::kStatusBodyTextPx, foreground);
+    drawCentredLine(gfx, line2, y, ui::theme::kStatusBodyTextPx, detail);
   }
 
   if ((ways & kCardGearToSettings) != 0) {

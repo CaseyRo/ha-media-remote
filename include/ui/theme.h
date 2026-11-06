@@ -48,17 +48,22 @@ constexpr int kRadius = kSize / 2;
  *  taken from config, because a card's colours are a display decision. */
 constexpr uint16_t kStatusPlain = 0x0000;
 constexpr uint16_t kStatusPlainText = 0xFFFF;
+// Apple's dark system palette: white text, grey surfaces, and colour only
+// where it means a state -- no brand accent. "Accent" is white, so a pressed
+// or primary control is a white pill with black text, as on watchOS.
 constexpr uint16_t kBackground = 0x0000;       // black
-constexpr uint16_t kSurface = 0x18E3;          // near-black card
-constexpr uint16_t kSurfaceRaised = 0x3186;    // pressed / highlighted
-constexpr uint16_t kAccent = 0x05FF;           // HA cyan-blue
+constexpr uint16_t kSurface = 0x18E3;          // #1C1C1E, a cell
+constexpr uint16_t kSurfaceRaised = 0x2965;    // #2C2C2E, raised / current
+constexpr uint16_t kAccent = 0xFFFF;           // white
 constexpr uint16_t kTextPrimary = 0xFFFF;
-constexpr uint16_t kTextSecondary = 0xC618;    // light grey
-constexpr uint16_t kTextMuted = 0x8410;        // mid grey
-constexpr uint16_t kArcTrack = 0x2945;         // unfilled arc, shared
+constexpr uint16_t kTextSecondary = 0xA534;    // white at about 65%
+constexpr uint16_t kTextMuted = 0x630C;        // #636366
+constexpr uint16_t kArcTrack = 0x39E7;         // unfilled arc, shared
 constexpr uint16_t kVolumeFill = 0xFFFF;
 constexpr uint16_t kVolumeMutedFill = 0x8410;  // level still shown, greyed
-constexpr uint16_t kWarning = 0xFD20;          // amber
+constexpr uint16_t kWarning = 0xFCE1;          // #FF9F0A, something degraded
+constexpr uint16_t kError = 0xFA27;            // #FF453A, failed / low
+constexpr uint16_t kGood = 0x368B;             // #30D158, charging
 
 // --- Scrim over the cover art, so text stays legible on any image ---
 /** Flat dim applied across the whole backdrop. */
@@ -72,7 +77,7 @@ constexpr uint8_t kScrimGradientAlpha = 120;
 // 12 o'clock is -90. Centring the span there sets its ends at the lower left
 // and lower right, and leaves the remaining 108 degrees as a gap across the
 // bottom -- clear of the transport row, and where the elapsed chip sits.
-constexpr float kVolumeArcFraction = 0.70f;
+constexpr float kVolumeArcFraction = 0.75f;
 constexpr float kVolumeArcSweepDeg = 360.0f * kVolumeArcFraction;
 constexpr float kVolumeArcCenterDeg = -90.0f;
 constexpr float kVolumeArcStartDeg =
@@ -81,12 +86,12 @@ constexpr float kVolumeArcEndDeg =
     kVolumeArcCenterDeg + kVolumeArcSweepDeg / 2.0f;  // +36 == lower right
 
 constexpr int kVolumeArcOuterRadius = px(118);
-constexpr int kVolumeArcInnerRadius = px(111);
+constexpr int kVolumeArcInnerRadius = px(116);
 // There is no hit band any more. A press does not have to land on the arc at
 // all -- a horizontal swipe anywhere in the top half drives it, and moves it
 // by the distance the finger travelled. See ui::now_playing::volumeSwipeRegion.
 /** Knob marking the current level. */
-constexpr int kVolumeKnobRadius = px(6);
+constexpr int kVolumeKnobRadius = px(4);
 
 // --- Elapsed / total chip, in the gap at the foot of the volume arc ---
 // Drawn on an opaque pill so the once-a-second update can be painted straight
@@ -123,6 +128,39 @@ constexpr float kProgressArcEndDeg =
 constexpr int kSeekBandInsideArc = px(26);
 constexpr float kSeekBandSlackDeg = 6.0f;
 constexpr int kSeekBandAboveBar = px(16);
+
+// --- Round now playing: Apple Music's layout, top to bottom ---
+// The cover top centre, the title (two lines at most) and the artist under
+// it, a scrubber with elapsed and remaining time, three plain glyphs, and the
+// volume as a thin ring at the rim. Standby is the same frame without the
+// scrubber and the glyphs, so the cover never moves between the two.
+/** The line above the cover: the battery on standby, the rooms chip awake. */
+constexpr int kNpTopLineY = px(11);
+constexpr int kNpCoverSize = px(84);
+constexpr int kNpCoverX = kCenterX - kNpCoverSize / 2;
+constexpr int kNpCoverY = px(21);
+constexpr int kNpCoverRadius = px(7);
+/** The band the title and artist are centred in, together. */
+constexpr int kNpTextTop = px(109);
+constexpr int kNpTextBottom = px(167);
+constexpr int kNpTitleTextPx = textPx(20);
+constexpr int kNpTitleLineHeight = textPx(20);
+constexpr int kNpArtistTextPx = textPx(17);
+constexpr int kNpArtistGap = px(1);
+constexpr int kNpScrubY = px(172);
+constexpr int kNpScrubHalfWidth = px(62);
+constexpr int kNpScrubHeight = px(3);
+/** A sideways drag starting this close above or below the scrubber, or past
+ *  its ends, seeks. */
+constexpr int kNpSeekBandHalf = px(16);
+constexpr int kNpTimesY = px(184);
+constexpr int kNpTimesTextPx = textPx(15);
+constexpr int kNpTransportY = px(208);
+constexpr int kNpTransportSpacing = px(54);
+constexpr int kNpPlayHalfHeight = px(11);
+constexpr int kNpSkipHalfHeight = px(8);
+/** Under half the spacing, so neighbouring targets cannot overlap. */
+constexpr int kNpTransportHitRadius = px(26);
 
 // --- Now-playing text block: artist above, track title below ---
 // The artist is one line and the title may be two, so putting the artist first
@@ -163,7 +201,7 @@ constexpr int kGlyphSkipBarGap = px(2);
 // Row metrics for a list on a round panel: rows are pinched by the circle at
 // whichever of their edges sits further from the centre, so the geometry --
 // not a fixed row count -- decides how many fit.
-constexpr uint16_t kListBackdrop = 0x0841;  // just off black
+constexpr uint16_t kListBackdrop = 0x0000;  // black, as watchOS lists
 constexpr int kListTitleTextPx = listTextPx(17);
 /** Everything above this is the strip that dismisses the list on a tap.
  *  On a round panel it also keeps the first row out of the circle's narrow
@@ -185,7 +223,7 @@ constexpr int kListRowGap = listPx(4);
 /** Gap between the thumbnail and the name. */
 constexpr int kListThumbGap = listPx(10);
 constexpr int kListRowRadius = listPx(10);
-constexpr int kListRowTextPx = listTextPx(20);
+constexpr int kListRowTextPx = listTextPx(17);
 /** Rows are inset from the circle edge at their own y by this much. */
 constexpr int kListRowInset = listPx(10);
 constexpr int kListTextInset = listPx(12);
@@ -254,7 +292,7 @@ constexpr int kSearchResultTopY = px(48);
 // --- Status / message screens ---
 constexpr int kStatusLineGap = px(6);
 constexpr int kStatusTitleTextPx = textPx(24);
-constexpr int kStatusBodyTextPx = textPx(20);
+constexpr int kStatusBodyTextPx = textPx(17);
 
 /** Half-width of the circle at a given y -- how much horizontal room a row of
  *  text actually has on a round panel. Returns 0 outside the circle. */

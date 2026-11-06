@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 #include <WebServer.h>
+#include <esp_heap_caps.h>
 
 #include "board/board.h"
 #include "config.h"
@@ -25,6 +26,7 @@
 #include "ui/canvas.h"
 #include "ui/cover_art.h"
 #include "ui/now_playing.h"
+#include "ui/paint.h"
 #include "ui/isolate_card.h"
 #include "ui/peers_chip.h"
 #include "ui/player_pick.h"
@@ -926,6 +928,61 @@ bool init(uint8_t rotation) {
       server.send(200, "application/json", body);
     });
   }
+  // The composed frame as a 24-bit BMP: a look at the screen without a camera,
+  // for checking a layout from the desk. Read from the loop, as the web server
+  // runs there, so it never meets a half-drawn frame.
+  wifiAddWebPage("/frame", [](WebServer& server) {
+    if (!canvasReady()) {
+      server.send(503, "text/plain", "no frame buffer");
+      return;
+    }
+    constexpr int kW = theme::kSize;
+    constexpr int kRowBytes = (kW * 3 + 3) & ~3;
+    constexpr int kRowsPerChunk = 8;
+    constexpr uint32_t kData = static_cast<uint32_t>(kRowBytes) * kW;
+    auto* chunk = static_cast<uint8_t*>(heap_caps_malloc(
+        kRowBytes * kRowsPerChunk, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (chunk == nullptr) {
+      server.send(503, "text/plain", "no memory");
+      return;
+    }
+    uint8_t head[54] = {'B', 'M'};
+    auto put32 = [&](int at, uint32_t v) {
+      for (int i = 0; i < 4; ++i) head[at + i] = (v >> (8 * i)) & 0xFF;
+    };
+    put32(2, 54 + kData);
+    put32(10, 54);
+    put32(14, 40);
+    put32(18, kW);
+    put32(22, kW);
+    head[26] = 1;
+    head[28] = 24;
+    put32(34, kData);
+    server.setContentLength(54 + kData);
+    server.send(200, "image/bmp", "");
+    server.sendContent(reinterpret_cast<const char*>(head), sizeof(head));
+    const uint16_t* pixels = canvasPixels(canvas());
+    const bool swapped = canvasByteSwapped();
+    int filled = 0;
+    for (int y = kW - 1; y >= 0; --y) {  // BMP rows run bottom-up
+      uint8_t* out = chunk + filled * kRowBytes;
+      memset(out, 0, kRowBytes);
+      const uint16_t* line = pixels + static_cast<size_t>(y) * kW;
+      for (int x = 0; x < kW; ++x) {
+        uint16_t c = line[x];
+        if (swapped) c = static_cast<uint16_t>((c >> 8) | (c << 8));
+        out[x * 3 + 0] = static_cast<uint8_t>((c & 31) * 255 / 31);
+        out[x * 3 + 1] = static_cast<uint8_t>(((c >> 5) & 63) * 255 / 63);
+        out[x * 3 + 2] = static_cast<uint8_t>(((c >> 11) & 31) * 255 / 31);
+      }
+      if (++filled == kRowsPerChunk || y == 0) {
+        server.sendContent(reinterpret_cast<const char*>(chunk),
+                           filled * kRowBytes);
+        filled = 0;
+      }
+    }
+    heap_caps_free(chunk);
+  });
   return true;
 }
 
@@ -960,33 +1017,33 @@ void drawUnlockRing(float fraction) {
   if (to - s_ring_deg < 10.0f) {
     return;
   }
-  panel().fillArc(theme::kCenterX, theme::kCenterY,
-                  theme::kVolumeArcInnerRadius, theme::kVolumeArcOuterRadius,
-                  s_ring_deg, to, theme::kAccent);
-  if (!board::kPanelWritesDirect) {
-    // The outer edge's extent over the stretch, widened by the ring's width
-    // so the inner edge is inside it too.
-    constexpr float kRad = 3.14159265f / 180.0f;
-    int x0 = theme::kSize, y0 = theme::kSize, x1 = 0, y1 = 0;
-    for (float a = s_ring_deg;; a += 5.0f) {
-      const float t = (a < to ? a : to) * kRad;
-      const int x = theme::kCenterX +
-                    static_cast<int>(cosf(t) * theme::kVolumeArcOuterRadius);
-      const int y = theme::kCenterY +
-                    static_cast<int>(sinf(t) * theme::kVolumeArcOuterRadius);
-      x0 = x < x0 ? x : x0;
-      x1 = x > x1 ? x : x1;
-      y0 = y < y0 ? y : y0;
-      y1 = y > y1 ? y : y1;
-      if (a >= to) {
-        break;
-      }
+  // Drawn into the frame and pushed, on every panel: anti-aliased, a little
+  // heavier than the volume ring it runs over, in white.
+  const float r =
+      (theme::kVolumeArcInnerRadius + theme::kVolumeArcOuterRadius) / 2.0f;
+  const float half =
+      (theme::kVolumeArcOuterRadius - theme::kVolumeArcInnerRadius) / 2.0f +
+      theme::px(1);
+  paint::arc(theme::kCenterX, theme::kCenterY, r, half, s_ring_deg, to,
+             theme::kTextPrimary);
+  // The stretch's extent, widened by the ring's width.
+  constexpr float kRad = 3.14159265f / 180.0f;
+  int x0 = theme::kSize, y0 = theme::kSize, x1 = 0, y1 = 0;
+  for (float a = s_ring_deg;; a += 5.0f) {
+    const float t = (a < to ? a : to) * kRad;
+    const int x = theme::kCenterX + static_cast<int>(cosf(t) * r);
+    const int y = theme::kCenterY + static_cast<int>(sinf(t) * r);
+    x0 = x < x0 ? x : x0;
+    x1 = x > x1 ? x : x1;
+    y0 = y < y0 ? y : y0;
+    y1 = y > y1 ? y : y1;
+    if (a >= to) {
+      break;
     }
-    const int pad =
-        theme::kVolumeArcOuterRadius - theme::kVolumeArcInnerRadius + 2;
-    canvasPresentRegion(x0 - pad, y0 - pad, x1 - x0 + 2 * pad,
-                        y1 - y0 + 2 * pad);
   }
+  const int pad = static_cast<int>(half) + 3;
+  canvasPresentRegion(x0 - pad, y0 - pad, x1 - x0 + 2 * pad,
+                      y1 - y0 + 2 * pad);
   s_ring_deg = to;
 }
 
@@ -1437,32 +1494,67 @@ void wake() {
   hw::touchCancel();
 }
 
+/** Above the cover on standby: a padlock while locked, and the battery as a
+ *  drawn cell with its percentage -- green while charging, red at a fifth or
+ *  less -- on a board with one. */
+void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
+  const int pct = hw::batteryPercent();
+  const bool charging = hw::batteryCharging();
+  if (pct < 0 && !s_locked) {
+    return;
+  }
+  const int y = theme::kNpTopLineY;
+  displayFontApplyHeight(gfx, theme::kNpTimesTextPx);
+  char label[8] = {};
+  if (pct >= 0) {
+    snprintf(label, sizeof(label), "%d%%", pct);
+  }
+  const int lock_w = s_locked ? theme::px(7) : 0;
+  const int cell_w = pct >= 0 ? theme::px(12) : 0;
+  const int nub_w = pct >= 0 ? theme::px(1) + 1 : 0;
+  const int gap = theme::px(4);
+  const int text_w = label[0] != '\0' ? gfx.textWidth(label) : 0;
+  const int total = lock_w + (lock_w && cell_w ? gap : 0) + cell_w + nub_w +
+                    (text_w ? gap + text_w : 0);
+  int x = theme::kCenterX - total / 2;
+  if (s_locked) {
+    // A padlock: the shackle as a half ring over a rounded body.
+    const float bw = lock_w;
+    const float bh = theme::px(5) + 1;
+    const float body_top = y - bh / 2.0f + theme::px(1);
+    paint::arc(x + bw / 2.0f, body_top, bw * 0.3f, theme::px(1) * 0.6f, 180.0f,
+               360.0f, theme::kTextSecondary);
+    paint::roundRect(x, body_top, bw, bh, theme::px(1), theme::kTextSecondary);
+    x += lock_w + gap;
+  }
+  if (pct >= 0) {
+    const float ch = theme::px(6);
+    const float top = y - ch / 2.0f;
+    const uint16_t level_color = charging   ? theme::kGood
+                                 : pct <= 20 ? theme::kError
+                                             : theme::kTextPrimary;
+    paint::roundRect(x, top, cell_w, ch, ch * 0.3f, 0xFFFF, 90);
+    paint::roundRect(x + cell_w + 1, y - ch * 0.2f, nub_w, ch * 0.4f,
+                     nub_w * 0.5f, 0xFFFF, 90);
+    const float inset = theme::px(1);
+    const float fill = (cell_w - 2 * inset) * (pct > 100 ? 100 : pct) / 100.0f;
+    if (fill > 0.5f) {
+      paint::roundRect(x + inset, top + inset, fill, ch - 2 * inset,
+                       ch * 0.2f, level_color);
+    }
+    x += cell_w + nub_w + gap;
+    gfx.setTextDatum(textdatum_t::middle_left);
+    gfx.setTextColor(theme::kTextSecondary);
+    gfx.drawString(label, x, y);
+  }
+}
+
 void dim(const PlayerState& state) {
   if (!s_dimmed) {
     dimPanel(true);
   }
   now_playing::composeStandby(state);
-  // Above the cover: the battery, on a board with one, and the lock.
-  char top[48] = {};
-  const int pct = hw::batteryPercent();
-  const char* lock = s_locked ? "Locked" : "";
-  if (pct >= 0) {
-    snprintf(top, sizeof(top), "%s%s%d%%%s", lock, lock[0] ? " \xC2\xB7 " : "",
-             pct, hw::batteryCharging() ? " charging" : "");
-  } else {
-    snprintf(top, sizeof(top), "%s", lock);
-  }
-  if (top[0] != '\0') {
-    lgfx::LovyanGFX& gfx = canvas();
-    const int y = theme::px(42);
-    displayFontApplyHeight(gfx, theme::kElapsedTextPx);
-    gfx.setTextDatum(textdatum_t::middle_center);
-    gfx.setTextColor(theme::kTextSecondary);
-    char shown[text::kMaxLineLen];
-    text::ellipsize(gfx, top, theme::usableWidthAt(y, theme::kTextEdgeInset),
-                    shown, sizeof(shown));
-    gfx.drawString(shown, theme::kCenterX, y);
-  }
+  drawStandbyStatus(canvas());
   canvasPresent();
   s_drawn_charging = hw::batteryCharging();
   s_dimmed = true;

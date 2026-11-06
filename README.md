@@ -242,7 +242,8 @@ channel, the signal the remote hears (**Rx**) and the power it transmits with
 (**Tx**).
 On a board with a battery -- the AMOLED 1.75 and 1.75C -- its charge comes
 after the address, with *charging* while it charges; the portal answers it at
-`/battery` as well, as JSON.
+`/battery` as well, as JSON. `/frame` returns what the screen shows, as a BMP,
+for checking a layout from the desk.
 
 The page refreshes every second. The **gear** at the top right, across the
 title row from the back button, opens

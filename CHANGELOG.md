@@ -21,6 +21,7 @@ GitHub release from that version's section, with
 - **Standby dims the panel**, on the AMOLED: its brightness steps down to `kDisplayDimBrightness` while standby is up, and back on a touch.
 - **Sleep and wake fade**, on the AMOLED: the panel fades down over about 150 ms before it sleeps, and on waking stays dark until the fresh frame is in and then fades up, rather than lighting at once on what its RAM kept through the sleep. Standby's dimming fades as well.
 - **A lock, on the two buttons**, on the AMOLED 1.75 and 1.75C: PWR and BOOT pressed together lock the touch screen, and held together for `kUnlockHoldMs` unlock it, a ring filling round the edge as they are held. Locked, no tap or swipe acts; the elapsed chip reads *Locked*, and a touch makes it *Hold both buttons* for `kLockHintMs`. Touches still wake a blank screen or the clock, and PWR still sleeps it. The pair spends its press: letting go of PWR is no sleep, and BOOT held with PWR is no settings reset.
+- **The screen over the network**: `/frame` on the portal answers the composed frame as a 24-bit BMP.
 - **The battery over the network**, on the AMOLED: `/battery` on the portal answers `{"percent":93,"charging":false}`, for logging a run-down without a cable.
 - **The radio naps between beacons** (`kWifiModemSleep`, modem sleep), where it was kept awake: the largest draw on a battery board, for about a tenth of a second more on a command or an update.
 - **The battery on standby**, on the AMOLED: above the cover, *92%*, or *92% charging*, and *Locked* when it is; drawn again within 10 s of charging starting or stopping.
@@ -38,6 +39,8 @@ This release shows Korean -- artist names and track titles in Hangul, drawn from
 - **Forget the Home Assistant token from the portal:** a checkbox under the token field. Saved ticked, the remote forgets the token, keeping the URL, and restarts to the sign-in QR code to link again. The next link deletes the forgotten token in Home Assistant, as it does the one a link replaces -- and so, now, does the link after a refused token is tapped away.
 
 ### Changed
+
+- **A new look on the round panels, after Apple Music** (`docs/design-brief.md`): the cover sits top centre on a blurred, darkened copy of itself, with soft rounded corners and a shadow; the title (two lines at most) and the artist under it; a scrubber with elapsed and remaining time; plain previous, play and next glyphs with no discs; the volume as a thin ring at the rim. Standby is the same frame without the controls, so the cover stays where it is, with a drawn battery and a padlock above it. Rings, glyphs, the scrubber and the cover's corners are anti-aliased (`ui/paint.h`), and the blur is dithered so it does not band. Text is Inter on the AMOLED (SemiBold titles, Regular body, Medium times), in Apple's dark palette: white, greys, and colour only for a state. List rows and thumbnails get smooth corners; the setup cards are black with an orange title instead of yellow screens. The speaker's name is not on now playing: the puck only ever has the one player.
 
 - **Recommended without a Music Assistant token** is eight artists from the library at random, rather than your favourite artists topped up at random. With a token it is artists like the first three of the list's top section -- the server's recent artists when Recent list is set to Music Assistant.
 

@@ -13,6 +13,7 @@
 #include "ui/back_button.h"
 #include "ui/canvas.h"
 #include "ui/text.h"
+#include "ui/paint.h"
 #include "ui/theme.h"
 
 namespace ui::search {
@@ -112,7 +113,7 @@ void drawSpaceGlyph(lgfx::LovyanGFX& gfx, int cx, int cy, uint16_t colour) {
 
 void drawKey(lgfx::LovyanGFX& gfx, const Layout& l, char label, int x, int y,
              int w) {
-  gfx.fillRoundRect(x, y, w, theme::kKeyHeight, theme::kKeyRadius,
+  gfx.fillSmoothRoundRect(x, y, w, theme::kKeyHeight, theme::kKeyRadius,
                     theme::kSurface);
 
   const int cx = x + w / 2;
@@ -168,7 +169,7 @@ void drawTypePill(lgfx::LovyanGFX& gfx) {
   const int h = theme::kSearchTypeHeight;
   const int x = theme::kCenterX - w / 2;
   const int y = theme::kSearchTypeY - h / 2;
-  gfx.fillRoundRect(x, y, w, h, h / 2, theme::kSurface);
+  gfx.fillSmoothRoundRect(x, y, w, h, h / 2, theme::kSurface);
 
   const int text_cx = x + theme::kSearchTypePadX +
                       (w - 2 * theme::kSearchTypePadX -
@@ -201,7 +202,7 @@ void drawKeyboard(lgfx::LovyanGFX& gfx) {
   const int gx = theme::kCenterX - theme::kSearchGoWidth / 2;
   const int gy = theme::kSearchGoY - theme::kSearchGoHeight / 2;
   const bool ready = services::search::query()[0] != '\0';
-  gfx.fillRoundRect(gx, gy, theme::kSearchGoWidth, theme::kSearchGoHeight,
+  gfx.fillSmoothRoundRect(gx, gy, theme::kSearchGoWidth, theme::kSearchGoHeight,
                     theme::kKeyRadius,
                     ready ? theme::kAccent : theme::kSurface);
   displayFontApplyHeight(gfx, theme::kKeyTextPx);
@@ -261,7 +262,7 @@ void drawResultRow(lgfx::LovyanGFX& gfx, int index, int top) {
   const int x = theme::kCenterX - half;
   const int w = half * 2;
 
-  gfx.fillRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
+  gfx.fillSmoothRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
                     theme::kSurface);
 
   int text_x = x + theme::kListTextInset;
@@ -273,6 +274,10 @@ void drawResultRow(lgfx::LovyanGFX& gfx, int index, int top) {
     const int tx = x + (theme::kListRowHeight - thumb) / 2;
     const int ty = top + (theme::kListRowHeight - thumb) / 2;
     if (artwork::draw(artwork::Kind::kSearch, index, gfx, tx, ty)) {
+      // Apple's small rounding on the art, where the row is in the frame.
+      if (ui::canvasPixels(gfx) != nullptr) {
+        paint::roundCorners(tx, ty, thumb, theme::px(4), theme::kSurface);
+      }
       const int used = tx + thumb + theme::kListThumbGap - text_x;
       text_x += used;
       text_w -= used;

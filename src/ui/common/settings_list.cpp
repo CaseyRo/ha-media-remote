@@ -92,7 +92,7 @@ void drawRow(lgfx::LovyanGFX& gfx, const Row& row, int top,
   const int w = half * 2;
   const int cy = top + theme::kListRowHeight / 2;
   const bool current = row.style == SettingStyle::kCurrent;
-  gfx.fillRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
+  gfx.fillSmoothRoundRect(x, top, w, theme::kListRowHeight, theme::kListRowRadius,
                     pressed   ? theme::kAccent
                     : current ? theme::kSurfaceRaised
                               : theme::kSurface);

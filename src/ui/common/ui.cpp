@@ -999,6 +999,10 @@ Input poll(Screen screen, const PlayerState* state) {
     statusScreenForgetCard();
   }
 
+#if defined(BOARD_PANEL_AMOLED)
+  displayTick();
+#endif
+
   // The two buttons, on a board whose power manager reports PWR. Together
   // they lock the touch screen, or, held kUnlockHoldMs, unlock it -- one of
   // the two per press. The pair spends its press: letting go of PWR is no

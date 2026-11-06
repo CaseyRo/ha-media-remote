@@ -39,6 +39,10 @@ bool displayIsBlanked();
  *  restores full brightness itself. */
 void displaySetDimmed(bool dimmed);
 
+/** Called every input pass: lights a panel that woke and has been sent no
+ *  frame since. AMOLED only, called only by BOARD_PANEL_AMOLED builds. */
+void displayTick();
+
 /**
  * Put a rectangle of a composed frame on the glass.
  *

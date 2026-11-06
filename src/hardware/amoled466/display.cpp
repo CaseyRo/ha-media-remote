@@ -35,11 +35,11 @@ int evenUp(int v) {
 
 /** The brightness last sent, for a fade to start from. */
 uint8_t s_level = 0;
-/** Woken and still dark: fade up once a whole frame is in (see
- *  displayPresentFrame), or kFadeInFallbackMs on, whatever has come. */
+/** Woken and still dark: fade up with the first frame pushed, or from
+ *  displayTick() kFadeInFallbackMs on, whatever has come. */
 bool s_fade_in = false;
 unsigned long s_woken_ms = 0;
-constexpr unsigned long kFadeInFallbackMs = 500;
+constexpr unsigned long kFadeInFallbackMs = 400;
 
 /** Step the panel's brightness to `to` over about 150 ms. It is one command
  *  to the controller, so a fade is a handful of them and redraws nothing --
@@ -53,6 +53,13 @@ void fadeTo(uint8_t to) {
     delay(kStepMs);
   }
   s_level = to;
+}
+
+/** Up from dark after a wake, once. */
+void fadeIn() {
+  s_fade_in = false;
+  fadeTo(board::kDisplayBrightness);
+  LOG_INFO("Display: lit (%lu ms after waking)", millis() - s_woken_ms);
 }
 }  // namespace
 
@@ -208,10 +215,17 @@ void pushFrame(const uint16_t* frame, int x, int y, int w, int h) {
 
 void displayPresentFrame(const uint16_t* frame, int x, int y, int w, int h) {
   pushFrame(frame, x, y, w, h);
-  if (s_fade_in && ((w >= kSide && h >= kSide) ||
-                    millis() - s_woken_ms > kFadeInFallbackMs)) {
-    s_fade_in = false;
-    fadeTo(board::kDisplayBrightness);
+  if (s_fade_in) {
+    fadeIn();
+  }
+}
+
+void displayTick() {
+  // Woken, and nothing pushed since: light it anyway rather than leave a
+  // woken panel dark. A repaint held back -- for a cover, say -- came late or
+  // not at all, and the screen looked as if it had not woken.
+  if (s_fade_in && millis() - s_woken_ms > kFadeInFallbackMs) {
+    fadeIn();
   }
 }
 

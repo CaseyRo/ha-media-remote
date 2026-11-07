@@ -8,6 +8,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <esp_heap_caps.h>
+#include <esp_rom_crc.h>
 
 #include "board/board.h"
 #include "config.h"
@@ -943,6 +944,17 @@ bool init(uint8_t rotation) {
       return;
     }
     constexpr int kW = theme::kSize;
+    if (server.hasArg("hash")) {
+      // A few milliseconds rather than a second: what a watcher polls, to
+      // fetch the frame itself only when it has changed.
+      const uint32_t crc = esp_rom_crc32_le(
+          0, reinterpret_cast<const uint8_t*>(canvasPixels(canvas())),
+          static_cast<uint32_t>(kW) * kW * 2);
+      char body[12];
+      snprintf(body, sizeof(body), "%08lx", static_cast<unsigned long>(crc));
+      server.send(200, "text/plain", body);
+      return;
+    }
     constexpr int kRowBytes = (kW * 3 + 3) & ~3;
     constexpr int kRowsPerChunk = 32;
     constexpr uint32_t kData = static_cast<uint32_t>(kRowBytes) * kW;

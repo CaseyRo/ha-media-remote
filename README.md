@@ -243,7 +243,10 @@ channel, the signal the remote hears (**Rx**) and the power it transmits with
 On a board with a battery -- the AMOLED 1.75 and 1.75C -- its charge comes
 after the address, with *charging* while it charges; the portal answers it at
 `/battery` as well, as JSON. `/frame` returns what the screen shows, as a BMP,
-for checking a layout from the desk.
+for checking a layout from the desk; it holds the remote for about a second
+while it sends, so fetch it once, not on a loop. `/frame?hash=1` answers a
+checksum of the screen in milliseconds, for noticing it changed. `/perf`
+answers where the loop's time went, longest runs first kept.
 
 The page refreshes every second. The **gear** at the top right, across the
 title row from the back button, opens

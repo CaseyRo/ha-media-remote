@@ -12,12 +12,12 @@
 #include "config.h"
 #include "hardware/display.h"
 #include "hardware/display_font.h"
+#include "services/perf.h"
 #include "ui/canvas.h"
 #include "ui/cover_art.h"
 #include "ui/paint.h"
 #include "ui/peers_chip.h"
 #include "ui/text.h"
-#include "ui/text_glow.h"
 #include "ui/theme.h"
 
 // The round now playing, laid out as Apple Music's: the cover top centre on
@@ -207,18 +207,36 @@ Shape glyphShape(Action action, bool playing, float cx, float cy, float h) {
   return s;
 }
 
-constexpr int kMaskSide = 2 * theme::kNpPlayHalfHeight + 24;
-uint8_t s_mask[kMaskSide * kMaskSide];
+/** The four glyphs' coverage, rasterised once each -- supersampling three of
+ *  them on every compose cost tens of milliseconds of loop -- and kept in
+ *  PSRAM: previous, next, play, pause. */
+uint8_t* s_glyph_masks[4] = {};
 
-void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
-               bool enabled) {
+int glyphIndex(Action action, bool playing) {
+  switch (action) {
+    case Action::kPrevious:
+      return 0;
+    case Action::kNext:
+      return 1;
+    default:
+      return playing ? 3 : 2;
+  }
+}
+
+const uint8_t* glyphMask(const Button& b, bool playing) {
   int bx, by, bw, bh;
   glyphBox(b, bx, by, bw, bh);
-  if (bw > kMaskSide || bh > kMaskSide) {
-    return;
+  uint8_t*& mask = s_glyph_masks[glyphIndex(b.action, playing)];
+  if (mask != nullptr) {
+    return mask;
   }
-  const Shape s = glyphShape(b.action, isPlaying(state), b.cx + 0.5f,
-                             b.cy + 0.5f, static_cast<float>(b.half));
+  mask = static_cast<uint8_t*>(heap_caps_malloc(
+      static_cast<size_t>(bw) * bh, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+  if (mask == nullptr) {
+    return nullptr;
+  }
+  const Shape s = glyphShape(b.action, playing, b.cx + 0.5f, b.cy + 0.5f,
+                             static_cast<float>(b.half));
   for (int my = 0; my < bh; ++my) {
     for (int mx = 0; mx < bw; ++mx) {
       int hits = 0;
@@ -237,14 +255,25 @@ void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
           hits += in ? 1 : 0;
         }
       }
-      s_mask[my * bw + mx] = static_cast<uint8_t>(hits * 255 / 16);
+      mask[my * bw + mx] = static_cast<uint8_t>(hits * 255 / 16);
     }
   }
+  return mask;
+}
+
+void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
+               bool enabled) {
+  const uint8_t* mask = glyphMask(b, isPlaying(state));
+  if (mask == nullptr) {
+    return;
+  }
+  int bx, by, bw, bh;
+  glyphBox(b, bx, by, bw, bh);
   // Pressed reads as the glyph dimming under the finger, as on Apple's.
   const uint16_t color = !enabled ? theme::kTextMuted
                          : pressed ? 0x8C71  // #8E8E93
                                    : theme::kTextPrimary;
-  paint::mask(bx, by, bw, bh, s_mask, color);
+  paint::mask(bx, by, bw, bh, mask, color);
 }
 
 // --- Volume ring ------------------------------------------------------------
@@ -411,8 +440,9 @@ constexpr int kScrubLeft = theme::kCenterX - theme::kNpScrubHalfWidth;
 constexpr int kScrubWidth = 2 * theme::kNpScrubHalfWidth;
 
 /** The band the scrubber and its times repaint in, once a second: inside the
- *  volume ring at those rows, clear of the glyphs below. */
-constexpr int kBandHalfWidth = theme::px(92);
+ *  volume ring's inner edge down to the band's lowest row (wider, and the
+ *  repaint took bites out of the ring's two ends), clear of the glyphs. */
+constexpr int kBandHalfWidth = theme::px(86);
 constexpr int kBandTop = theme::kNpScrubY - theme::px(6);
 constexpr int kBandBottom = theme::kNpTimesY + theme::px(10);
 
@@ -433,7 +463,7 @@ void drawScrubber(lgfx::LovyanGFX& gfx, const PlayerState& state) {
     char line[text::kMaxLineLen];
     text::ellipsize(gfx, message, 2 * kBandHalfWidth, line, sizeof(line));
     gfx.setTextDatum(textdatum_t::middle_center);
-    gfx.setTextColor(warn ? theme::kWarning : theme::kTextSecondary);
+    gfx.setTextColor(warn ? theme::kWarning : theme::kNpSecondary);
     gfx.drawString(line, theme::kCenterX, theme::kNpTimesY);
     if (state.offline && services::ha::tokenRejected()) {
       const int w = gfx.textWidth(line);
@@ -453,7 +483,7 @@ void drawScrubber(lgfx::LovyanGFX& gfx, const PlayerState& state) {
   remaining[0] = '-';
   text::formatDuration(std::max(0.0f, state.duration_s - position),
                        remaining + 1, sizeof(remaining) - 1);
-  gfx.setTextColor(theme::kTextSecondary);
+  gfx.setTextColor(theme::kNpSecondary);
   gfx.setTextDatum(textdatum_t::middle_left);
   gfx.drawString(elapsed, kScrubLeft, theme::kNpTimesY);
   gfx.setTextDatum(textdatum_t::middle_right);
@@ -510,30 +540,21 @@ void drawTrackLines(lgfx::LGFXBase& gfx, const TrackText& text, int dy,
   }
   if (text.artist[0] != '\0') {
     displayFontApplyHeight(gfx, theme::kNpArtistTextPx);
-    gfx.setTextColor(mask ? theme::kTextPrimary : theme::kTextSecondary);
+    gfx.setTextColor(mask ? theme::kTextPrimary : theme::kNpSecondary);
     gfx.drawString(text.artist, theme::kCenterX, text.artist_y - dy);
   }
 }
-
-/** The rows the glow covers: the text band, with room for the blur to
- *  spread both ways. See ui/text_glow.h. */
-constexpr int kGlowTop = theme::kNpTextTop - ui::glow::kMargin;
-constexpr int kGlowBottom = theme::kNpTextBottom + ui::glow::kMargin;
 
 void drawTrackText(lgfx::LovyanGFX& gfx, const PlayerState& state,
                    bool over_art) {
   if (state.title[0] == '\0' && state.hold_label) {
     return;  // most likely between tracks: blank, not "Nothing playing"
   }
+  (void)over_art;
   TrackText text;
   layoutTrackText(gfx, state, text);
-  // Only over art: on the plain backdrop there is nothing to stand out from.
-  if (over_art) {
-    if (auto* mask = ui::glow::begin(kGlowTop, kGlowBottom - kGlowTop)) {
-      drawTrackLines(*mask, text, kGlowTop, true);
-      ui::glow::apply();
-    }
-  }
+  // No glow under it: on a blurred ground a shadow shows as a box round each
+  // line. The ground is darkened enough for white instead (paint.cpp).
   drawTrackLines(gfx, text, 0, false);
 }
 
@@ -585,11 +606,15 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
     over_art = has_art && ui::canvasRestoreBackdrop(ui::Backdrop::kArt, art);
     if (!over_art && has_art) {
       gfx.fillScreen(theme::kBackground);
+      uint32_t t0 = millis();
       over_art = ui::cover::draw(gfx, theme::kNpCoverX, theme::kNpCoverY,
                                  theme::kNpCoverSize);
+      perf::record("np.coverDecode", millis() - t0);
       if (over_art) {
+        t0 = millis();
         paint::coverBackdrop(theme::kNpCoverX, theme::kNpCoverY,
                              theme::kNpCoverSize, theme::kNpCoverRadius);
+        perf::record("np.coverBlur", millis() - t0);
         ui::canvasSaveBackdrop(ui::Backdrop::kArt, art);
       }
     }

@@ -19,6 +19,7 @@
 #include "hardware/touch.h"
 #include "services/browse.h"
 #include "services/search.h"
+#include "services/perf.h"
 #include "services/wifi_setup.h"
 #include "ui/artwork.h"
 #include "ui/back_button.h"
@@ -928,6 +929,7 @@ bool init(uint8_t rotation) {
       server.send(200, "application/json", body);
     });
   }
+  perf::registerPage();
   // The composed frame as a 24-bit BMP: a look at the screen without a camera,
   // for checking a layout from the desk. Read from the loop, as the web server
   // runs there, so it never meets a half-drawn frame.

@@ -136,6 +136,9 @@ constexpr int kSeekBandAboveBar = px(16);
 // scrubber and the glyphs, so the cover never moves between the two.
 /** The line above the cover: the battery on standby, the rooms chip awake. */
 constexpr int kNpTopLineY = px(11);
+/** Secondary text over the blurred cover: a step brighter than kTextSecondary,
+ *  which is tuned for black, so the artist holds up on a light cover. */
+constexpr uint16_t kNpSecondary = 0xBDF7;  // #BDBDBD
 constexpr int kNpCoverSize = px(84);
 constexpr int kNpCoverX = kCenterX - kNpCoverSize / 2;
 constexpr int kNpCoverY = px(21);

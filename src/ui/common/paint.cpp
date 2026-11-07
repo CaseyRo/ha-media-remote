@@ -100,22 +100,12 @@ inline void unpack8(uint16_t c, float& r, float& g, float& b) {
   b = static_cast<float>(c & 31) * (255.0f / 31.0f);
 }
 
-/** Ordered dither to RGB565: each channel floored after a threshold from a
- *  4x4 Bayer matrix, so a smooth field averages to its true value instead of
- *  stepping. */
+/** Ordered dither to RGB565 (fillFromGrid): each channel floored after a
+ *  threshold from a 4x4 Bayer matrix, so a smooth field averages to its true
+ *  value instead of stepping. */
 constexpr uint8_t kBayer[4][4] = {
     {0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
 
-inline uint16_t dither565(float r, float g, float b, int x, int y) {
-  const float d = (kBayer[y & 3][x & 3] + 0.5f) / 16.0f;
-  int r5 = static_cast<int>(r * (31.0f / 255.0f) + d);
-  int g6 = static_cast<int>(g * (63.0f / 255.0f) + d);
-  int b5 = static_cast<int>(b * (31.0f / 255.0f) + d);
-  r5 = r5 < 0 ? 0 : r5 > 31 ? 31 : r5;
-  g6 = g6 < 0 ? 0 : g6 > 63 ? 63 : g6;
-  b5 = b5 < 0 ? 0 : b5 > 31 ? 31 : b5;
-  return static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
-}
 
 /** The sharp cover, kept while its backdrop is laid under it. PSRAM. */
 uint16_t* s_cover = nullptr;
@@ -195,7 +185,22 @@ struct Grid {
 
 void fillFromGrid(const Target& t, const Grid& grid, float keep_top,
                   float keep_bottom) {
-  float row_c[kGrid][3];
+  // Fixed point throughout -- 8.8 colour, 0..256 weights, the column lookups
+  // made once -- since this covers the whole glass on every new cover: in
+  // floats it was 200 ms of a track change.
+  static int16_t col_x0[kSide];
+  static uint16_t col_fx[kSide];
+  static bool cols_ready = false;
+  if (!cols_ready) {
+    for (int px = 0; px < kSide; ++px) {
+      float g = (px + 0.5f) * kGrid / kSide - 0.5f;
+      g = g < 0.0f ? 0.0f : g > kGrid - 1 ? static_cast<float>(kGrid - 1) : g;
+      col_x0[px] = static_cast<int16_t>(g);
+      col_fx[px] = static_cast<uint16_t>((g - col_x0[px]) * 256.0f + 0.5f);
+    }
+    cols_ready = true;
+  }
+  int32_t row_c[kGrid + 1][3];
   for (int py = 0; py < kSide; ++py) {
     const int half = theme::chordHalfWidth(py);
     if (half <= 0) {
@@ -212,24 +217,34 @@ void fillFromGrid(const Target& t, const Grid& grid, float keep_top,
     const float fy = gy - y0;
     for (int gx = 0; gx < kGrid; ++gx) {
       for (int ch = 0; ch < 3; ++ch) {
-        row_c[gx][ch] = (grid.c[y0][gx][ch] * (1.0f - fy) +
+        const float v = (grid.c[y0][gx][ch] * (1.0f - fy) +
                          grid.c[y1][gx][ch] * fy) *
                         keep;
+        row_c[gx][ch] = static_cast<int32_t>(v * 256.0f);  // 8.8
       }
     }
+    for (int ch = 0; ch < 3; ++ch) {
+      row_c[kGrid][ch] = row_c[kGrid - 1][ch];  // x0 + 1 past the last
+    }
+    const uint8_t* bayer = kBayer[py & 3];
     uint16_t* line = t.buf + static_cast<size_t>(py) * kSide;
     for (int px = xa; px < xb; ++px) {
-      float gxf = (px + 0.5f) * kGrid / kSide - 0.5f;
-      gxf = gxf < 0.0f ? 0.0f
-            : gxf > kGrid - 1 ? static_cast<float>(kGrid - 1)
-                              : gxf;
-      const int x0 = static_cast<int>(gxf);
-      const int x1 = x0 + 1 < kGrid ? x0 + 1 : x0;
-      const float fx = gxf - x0;
-      const float r = row_c[x0][0] * (1.0f - fx) + row_c[x1][0] * fx;
-      const float g = row_c[x0][1] * (1.0f - fx) + row_c[x1][1] * fx;
-      const float b = row_c[x0][2] * (1.0f - fx) + row_c[x1][2] * fx;
-      const uint16_t out = dither565(r, g, b, px, py);
+      const int x0 = col_x0[px];
+      const int32_t fx = col_fx[px];
+      const int32_t* a = row_c[x0];
+      const int32_t* b = row_c[x0 + 1];
+      const int32_t r = (a[0] * (256 - fx) + b[0] * fx) >> 8;
+      const int32_t g = (a[1] * (256 - fx) + b[1] * fx) >> 8;
+      const int32_t bl = (a[2] * (256 - fx) + b[2] * fx) >> 8;
+      // value * 31/255 (or 63/255) in 8.8, plus the Bayer step, floored.
+      const int32_t d = bayer[px & 3] * 16 + 8;
+      int32_t r5 = (((r * 7967) >> 16) + d) >> 8;
+      int32_t g6 = (((g * 16191) >> 16) + d) >> 8;
+      int32_t b5 = (((bl * 7967) >> 16) + d) >> 8;
+      r5 = r5 > 31 ? 31 : r5;
+      g6 = g6 > 63 ? 63 : g6;
+      b5 = b5 > 31 ? 31 : b5;
+      const uint16_t out = static_cast<uint16_t>((r5 << 11) | (g6 << 5) | b5);
       line[px] = t.swapped ? swap16(out) : out;
     }
   }
@@ -284,9 +299,26 @@ void arc(float cx, float cy, float r, float half_thick, float deg0, float deg1,
   const float inner2 = inner * inner;
   for (int y = ya; y < yb; ++y) {
     const float fy = y + 0.5f - cy;
-    for (int x = xa; x < xb; ++x) {
+    const float fy2 = fy * fy;
+    if (fy2 > outer2) {
+      continue;
+    }
+    // Only the annulus's own pixels on this row: one span through it, or two
+    // either side of its hole. Walking the whole box meant a full-panel scan
+    // per ring at the rim.
+    const float xo = sqrtf(outer2 - fy2);
+    const float xi = fy2 < inner2 ? sqrtf(inner2 - fy2) : 0.0f;
+    const int spans[2][2] = {
+        {static_cast<int>(floorf(cx - xo)), static_cast<int>(ceilf(cx - xi))},
+        {static_cast<int>(floorf(cx + xi)), static_cast<int>(ceilf(cx + xo))}};
+    const int nspans = xi > 0.0f ? 2 : 1;
+    for (int sp = 0; sp < nspans; ++sp) {
+      const int from = std::max(xa, spans[sp][0]);
+      const int to =
+          std::min(xb, nspans == 1 ? spans[1][1] + 1 : spans[sp][1] + 1);
+      for (int x = from; x < to; ++x) {
       const float fx = x + 0.5f - cx;
-      const float d2 = fx * fx + fy * fy;
+      const float d2 = fx * fx + fy2;
       if (d2 > outer2 || d2 < inner2) {
         continue;
       }
@@ -307,6 +339,7 @@ void arc(float cx, float cy, float r, float half_thick, float deg0, float deg1,
       const uint32_t w = weight(half_thick + 0.5f - dist, alpha);
       if (w != 0) {
         plot(t, x, y, color, w);
+      }
       }
     }
   }
@@ -488,8 +521,19 @@ void coverBackdrop(int x, int y, int size, int radius) {
       }
     }
   }
-  // Darker towards the foot, where the transport sits on it.
-  fillFromGrid(t, s_grid, 0.62f, 0.40f);
+  // Darker towards the foot, where the transport sits on it, and darker
+  // overall the lighter the cover: its brightest patch is brought down to
+  // about 100 of 255, so white text reads on it with no shadow.
+  float brightest = 1.0f;
+  for (int gy = 0; gy < kGrid; ++gy) {
+    for (int gx = 0; gx < kGrid; ++gx) {
+      const float* c = s_grid.c[gy][gx];
+      brightest = std::max(brightest,
+                           0.299f * c[0] + 0.587f * c[1] + 0.114f * c[2]);
+    }
+  }
+  const float keep_top = std::max(0.30f, std::min(0.62f, 100.0f / brightest));
+  fillFromGrid(t, s_grid, keep_top, keep_top * 0.68f);
   shadow(t, x, y, size, radius);
   restoreRounded(t, s_cover, x, y, size, radius);
 }

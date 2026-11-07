@@ -29,6 +29,7 @@
 #include <freertos/task.h>
 
 #include "app/app.h"
+#include "services/perf.h"
 #include "config.h"
 #include "log.h"
 #include "services/browse.h"
@@ -89,6 +90,11 @@ unsigned long g_last_elapsed_ms = 0;
 /** When the browse list or search screen was last opened, for
  *  kListIdleReturnMs. Loop only. */
 unsigned long g_list_opened_ms = 0;
+/** The list was opened before it had loaded: the poll task loads it and the
+ *  loop puts it up when it lands (handleBrowseWaiting), rather than the loop
+ *  waiting the load out with every touch unanswered -- 15 s, measured. */
+std::atomic<bool> g_browse_waiting{false};
+unsigned long g_browse_waiting_since = 0;
 /** When now playing last came up -- from another screen, or the panel
  *  waking -- for kDimAfterMs, which counts from this or the last touch,
  *  whichever is later. Loop only. */
@@ -961,13 +967,37 @@ bool g_search_from_now_playing = false;
     return;
   }
 
-  if (services::browse::busy() || services::browse::stale()) {
-    ui::showLoadingList();
-  }
-  services::browse::ensureLoaded();
   g_screen = Screen::kBrowse;
-  ui::showBrowse();
   g_list_opened_ms = millis();
+  if (services::browse::busy() || services::browse::staleNoWait()) {
+    ui::showLoadingList();
+    g_browse_waiting_since = millis();
+    g_browse_waiting = true;
+    return;
+  }
+  ui::showBrowse();
+}
+
+/** Put the list up once the poll task has it -- or, when no load comes (one
+ *  just failed and waits before trying again), after a few seconds, as
+ *  whatever there is: the old rows, or the reason there are none. */
+void handleBrowseWaiting() {
+  if (!g_browse_waiting) {
+    return;
+  }
+  if (g_screen != Screen::kBrowse) {
+    g_browse_waiting = false;  // left before it came
+    return;
+  }
+  if (services::browse::busy()) {
+    return;
+  }
+  if (services::browse::staleNoWait() &&
+      millis() - g_browse_waiting_since < 4000) {
+    return;
+  }
+  g_browse_waiting = false;
+  ui::showBrowse();
 }
 
 /** When the status page was last drawn, for its once-a-second refresh.
@@ -2815,7 +2845,8 @@ void haPollTask(void*) {
       // lock that the drawing side also takes, so doing it anyway would be
       // correct -- but it would mean scrolling stuttering against a load, and
       // there is no reason to refresh a list someone is reading.
-      if (g_screen != Screen::kBrowse && g_screen != Screen::kSearch) {
+      if ((g_screen != Screen::kBrowse && g_screen != Screen::kSearch) ||
+          g_browse_waiting) {
         services::browse::preload();
       }
 
@@ -3099,22 +3130,24 @@ void setup() {
  *  Apart, each handler's locals are on the stack only while it runs. */
 
 void loop() {
-  bootButtonPollLongPress();
-  wifiLoop();
-  handleWifiState();
+  const uint32_t pass_t0 = millis();
+  PERF_TIMED("bootButtonPollLongPress", bootButtonPollLongPress());
+  PERF_TIMED("wifiLoop", wifiLoop());
+  PERF_TIMED("handleWifiState", handleWifiState());
 
-  handleIdleBlanking();
+  PERF_TIMED("handleIdleBlanking", handleIdleBlanking());
 
   // The display reports a tap on a dark panel as kWokeFromTouch and nothing
   // else, so the same press cannot also press a button.
-  handleInput();
-  collectWifiScan();
-  handleListTimeout();
-  handleCommandResults();
-  handleToggleSettled();
+  PERF_TIMED("handleInput", handleInput());
+  PERF_TIMED("collectWifiScan", collectWifiScan());
+  PERF_TIMED("handleListTimeout", handleListTimeout());
+  PERF_TIMED("handleBrowseWaiting", handleBrowseWaiting());
+  PERF_TIMED("handleCommandResults", handleCommandResults());
+  PERF_TIMED("handleToggleSettled", handleToggleSettled());
 
-  handleMessageRecheck();
-  handleHaLink();
+  PERF_TIMED("handleMessageRecheck", handleMessageRecheck());
+  PERF_TIMED("handleHaLink", handleHaLink());
 
   // Before the artwork, and that ordering is the whole point. What is playing
   // is why the device exists; browse thumbnails are a preload for a list
@@ -3141,24 +3174,25 @@ void loop() {
                g_screen != Screen::kStatus && g_screen != Screen::kWifi &&
                g_screen != Screen::kPlayers && g_screen != Screen::kSettings &&
                g_screen != Screen::kIsolate && g_screen != Screen::kSources) {
-      showNowPlaying();
+      PERF_TIMED("showNowPlaying", showNowPlaying());
     } else {
       LOG_DEBUG("UI: repaint held back, a list is on screen");
     }
   }
 
-  handleUntitledRepaint();
-  handleOffHereRepaint();
+  PERF_TIMED("handleUntitledRepaint", handleUntitledRepaint());
+  PERF_TIMED("handleOffHereRepaint", handleOffHereRepaint());
 
   // Thumbnails are fetched on artwork's own worker; this only queues what the
   // screen wants and repaints when some of it has arrived.
-  ui::idleWork(g_screen);
-  handleStatusRefresh();
+  PERF_TIMED("idleWork", ui::idleWork(g_screen));
+  PERF_TIMED("handleStatusRefresh", handleStatusRefresh());
 
-  handleLockHint();
-  handleDimming();
-  handleElapsedTick();
+  PERF_TIMED("handleLockHint", handleLockHint());
+  PERF_TIMED("handleDimming", handleDimming());
+  PERF_TIMED("handleElapsedTick", handleElapsedTick());
 
+  perf::record("pass", millis() - pass_t0);
   delay(5);
 }
 

@@ -71,6 +71,9 @@ bool ensureLoaded();
 
 /** Whether the cached list is older than config::kBrowseTtlMs. */
 bool stale();
+/** As stale(), without taking the lock: never waits on a load in flight, and
+ *  may be a moment out of date. For the loop. */
+bool staleNoWait();
 
 /** Load in the background if stale, raising busy() while it does. What the
  *  poll task calls; the UI wants ensureLoaded(). */

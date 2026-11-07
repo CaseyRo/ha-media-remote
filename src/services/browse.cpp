@@ -320,6 +320,13 @@ void preload() {
   s_busy = false;
 }
 
+bool staleNoWait() {
+  // The same test without the lock, which a load in flight holds for
+  // seconds: a guess the loop can make without waiting on it.
+  return s_count == 0 || millis() - s_fetched_ms >= config::kBrowseTtlMs ||
+         s_room_generation != roomGeneration();
+}
+
 bool stale() {
   Guard guard;
   return s_count == 0 || millis() - s_fetched_ms >= config::kBrowseTtlMs ||

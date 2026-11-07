@@ -6,6 +6,7 @@
 #include <cstdlib>
 
 #include <WebServer.h>
+#include <WiFi.h>
 #include <esp_heap_caps.h>
 
 #include "board/board.h"
@@ -932,7 +933,10 @@ bool init(uint8_t rotation) {
   perf::registerPage();
   // The composed frame as a 24-bit BMP: a look at the screen without a camera,
   // for checking a layout from the desk. Read from the loop, as the web server
-  // runs there, so it never meets a half-drawn frame.
+  // runs there, so it never meets a half-drawn frame -- and so nothing on the
+  // puck answers while it sends: the radio is kept awake for it and the rows
+  // go in large chunks, which took a frame from about 17 s to about 1. Fetch
+  // one at a time, never on a tight loop.
   wifiAddWebPage("/frame", [](WebServer& server) {
     if (!canvasReady()) {
       server.send(503, "text/plain", "no frame buffer");
@@ -940,7 +944,7 @@ bool init(uint8_t rotation) {
     }
     constexpr int kW = theme::kSize;
     constexpr int kRowBytes = (kW * 3 + 3) & ~3;
-    constexpr int kRowsPerChunk = 8;
+    constexpr int kRowsPerChunk = 32;
     constexpr uint32_t kData = static_cast<uint32_t>(kRowBytes) * kW;
     auto* chunk = static_cast<uint8_t*>(heap_caps_malloc(
         kRowBytes * kRowsPerChunk, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -960,6 +964,7 @@ bool init(uint8_t rotation) {
     head[26] = 1;
     head[28] = 24;
     put32(34, kData);
+    WiFi.setSleep(WIFI_PS_NONE);
     server.setContentLength(54 + kData);
     server.send(200, "image/bmp", "");
     server.sendContent(reinterpret_cast<const char*>(head), sizeof(head));
@@ -984,6 +989,7 @@ bool init(uint8_t rotation) {
       }
     }
     heap_caps_free(chunk);
+    WiFi.setSleep(config::kWifiModemSleep ? WIFI_PS_MIN_MODEM : WIFI_PS_NONE);
   });
   return true;
 }

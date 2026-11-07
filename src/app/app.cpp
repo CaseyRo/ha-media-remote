@@ -377,7 +377,8 @@ void showNowPlaying() {
   }
 
   PlayerState snapshot;
-  const bool have_state = snapshotState(snapshot);
+  bool have_state = false;
+  PERF_TIMED("np.snapshot", have_state = snapshotState(snapshot));
   if (!have_state && ui::isDimmed()) {
     // A state not to hand for a moment -- a 50 ms wait on the poll task, as
     // around a track change -- is no reason to take standby away for a card.
@@ -415,7 +416,7 @@ void showNowPlaying() {
   markLock(snapshot);
   // Resting on standby: what changed shows there.
   if (ui::isDimmed()) {
-    ui::dim(snapshot);
+    PERF_TIMED("np.dim", ui::dim(snapshot));
     g_screen = Screen::kNowPlaying;
     return;
   }
@@ -423,7 +424,7 @@ void showNowPlaying() {
     g_np_since_ms = millis();
   }
   LOG_DEBUG("UI: now playing \"%s\"", snapshot.title);
-  ui::showNowPlaying(snapshot);
+  PERF_TIMED("np.ui", ui::showNowPlaying(snapshot));
   g_screen = Screen::kNowPlaying;
   g_last_elapsed_ms = millis();
 }

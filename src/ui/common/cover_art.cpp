@@ -1138,22 +1138,49 @@ bool fetchThumb(lgfx::LGFXBase& gfx, const char* url, int x, int y,
                                 0, 0, 0.0f, 0.0f, datum_t::middle_center)
                   : gfx.drawJpg(s_thumb_buffer, sink.length(), x, y, size, size,
                                 0, 0, 0.0f, 0.0f, datum_t::middle_center);
-    } else {
-      // Too big to hold: decode off the socket, as every thumbnail once did.
-      StreamWrapper source(
-          conn.http.getStreamPtr(),
-          content_length > 0 ? static_cast<uint32_t>(content_length) : ~0u);
-      Guard guard;
-      drawn = format == Format::kPng
-                  ? gfx.drawPng(&source, x, y, size, size, 0, 0, 0.0f, 0.0f,
-                                datum_t::middle_center)
-                  : gfx.drawJpg(&source, x, y, size, size, 0, 0, 0.0f, 0.0f,
-                                datum_t::middle_center);
-      // A decoder that stops at the end of the image can leave bytes of it
-      // unread, and those would be read as the next response's headers.
-      if (content_length <= 0 || source.tell() != content_length) {
+    } else if (content_length <= static_cast<int>(config::kCoverArtMaxBytes)) {
+      // Larger than the thumbnail buffer: into one of its own first, then
+      // decoded. Never decoded straight off the socket any more -- the lock is
+      // held for a decode and now playing waits on it, so a slow download
+      // under it stopped every touch for as long as it took (19 s, measured).
+      auto* big = static_cast<uint8_t*>(heap_caps_malloc(
+          static_cast<size_t>(content_length),
+          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+      if (big == nullptr) {
+        LOG_WARN("Art: no room for %d bytes, skipping %s", content_length,
+                 target.c_str());
         conn.close();
+        conn.http.end();
+        return false;
       }
+      BufferSink sink(big, static_cast<size_t>(content_length));
+      const int got = conn.http.writeToStream(&sink);
+      if (got <= 0 || sink.overflowed()) {
+        LOG_WARN("Art: body failed for %s (%d)", target.c_str(), got);
+        heap_caps_free(big);
+        conn.close();
+        conn.http.end();
+        return false;
+      }
+      bytes = static_cast<int>(sink.length());
+      if (format == Format::kUnknown) {
+        format = formatFromMagic(big, sink.length());
+      }
+      {
+        Guard guard;
+        drawn = format == Format::kPng
+                    ? gfx.drawPng(big, sink.length(), x, y, size, size, 0, 0,
+                                  0.0f, 0.0f, datum_t::middle_center)
+                    : gfx.drawJpg(big, sink.length(), x, y, size, size, 0, 0,
+                                  0.0f, 0.0f, datum_t::middle_center);
+      }
+      heap_caps_free(big);
+    } else {
+      LOG_WARN("Art: %d bytes is past the hard limit, skipping %s",
+               content_length, target.c_str());
+      conn.close();
+      conn.http.end();
+      return false;
     }
     conn.http.end();  // keeps the connection open when the server allows it
 

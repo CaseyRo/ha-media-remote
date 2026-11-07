@@ -662,8 +662,8 @@ void composeStandby(const PlayerState& state) {
 
 void draw(const PlayerState& state) {
   s_last_drawn = state;
-  compose(ui::canvas(), state);
-  ui::canvasPresent();
+  PERF_TIMED("np.compose", compose(ui::canvas(), state));
+  PERF_TIMED("np.present", ui::canvasPresent());
 }
 
 void refreshElapsed(const PlayerState& state) {

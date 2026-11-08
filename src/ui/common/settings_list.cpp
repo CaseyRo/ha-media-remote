@@ -108,11 +108,13 @@ void drawRow(lgfx::LovyanGFX& gfx, const Row& row, int top,
              text_w);
     return;
   }
+  // watchOS's way round: the setting's name first, in the row's colour, and
+  // its value under it in grey.
   drawLine(gfx, row.text, theme::kCenterX, cy + kLabelDy,
-           theme::kListHeaderTextPx,
-           pressed ? theme::kBackground : theme::kTextMuted, text_w);
-  drawLine(gfx, row.detail, theme::kCenterX, cy + kDetailDy,
            theme::kListRowTextPx, color, text_w);
+  drawLine(gfx, row.detail, theme::kCenterX, cy + kDetailDy,
+           theme::kListHeaderTextPx,
+           pressed ? theme::kBackground : theme::kTextSecondary, text_w);
 }
 
 }  // namespace

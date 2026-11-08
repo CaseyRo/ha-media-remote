@@ -210,12 +210,19 @@ void drawItem(lgfx::LovyanGFX& gfx, int top, const services::browse::Row& row) {
   if (thumb > 0) {
     const int thumb_x = x + (theme::kListRowHeight - thumb) / 2;
     const int thumb_y = y + (theme::kListRowHeight - thumb) / 2;
-    if (artwork::draw(artwork::Kind::kBrowse, row.item, gfx, thumb_x,
-                      thumb_y)) {
-      // Apple's small rounding on the art, where the row is in the frame.
-      if (ui::canvasPixels(gfx) != nullptr) {
-        paint::roundCorners(thumb_x, thumb_y, thumb, theme::px(4), theme::kSurface);
-      }
+    const bool in_frame = ui::canvasPixels(gfx) != nullptr;
+    const bool drawn = artwork::draw(artwork::Kind::kBrowse, row.item, gfx,
+                                     thumb_x, thumb_y);
+    if (drawn && in_frame) {
+      // Apple's small rounding on the art.
+      paint::roundCorners(thumb_x, thumb_y, thumb, theme::px(4),
+                          theme::kSurface);
+    } else if (in_frame) {
+      // No art (yet): the slot keeps its place, so every row's text starts
+      // in one column, as Apple Music's do.
+      paint::noteTile(thumb_x, thumb_y, thumb, theme::px(4));
+    }
+    if (drawn || in_frame) {
       const int used = thumb_x + thumb + theme::kListThumbGap - text_x;
       text_x += used;
       text_w -= used;

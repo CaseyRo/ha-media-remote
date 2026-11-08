@@ -79,7 +79,8 @@ void drawCentredLine(lgfx::LovyanGFX& gfx, const char* str, int y, int text_px,
  *  white, the value ellipsised to what the chord at `y` leaves it. An empty
  *  label leaves the value alone on its line. */
 void drawPairLine(lgfx::LovyanGFX& gfx, const char* label, const char* value,
-                  int y, int text_px) {
+                  int y, int text_px,
+                  uint16_t value_color = ui::theme::kTextPrimary) {
   if (label[0] == '\0') {
     drawCentredLine(gfx, value, y, text_px, ui::theme::kTextPrimary);
     return;
@@ -93,9 +94,9 @@ void drawPairLine(lgfx::LovyanGFX& gfx, const char* label, const char* value,
   ui::text::ellipsize(gfx, value, room - label_w - gap, shown, sizeof(shown));
   const int total = label_w + gap + gfx.textWidth(shown);
   const int x = ui::theme::kCenterX - total / 2;
-  gfx.setTextColor(ui::theme::kTextMuted);
+  gfx.setTextColor(ui::theme::kTextSecondary);
   gfx.drawString(label, x, y);
-  gfx.setTextColor(ui::theme::kTextPrimary);
+  gfx.setTextColor(value_color);
   gfx.drawString(shown, x + label_w + gap, y);
 }
 
@@ -270,6 +271,7 @@ void statusScreenDevice(const ui::DeviceStatus& status) {
   struct Pair {
     const char* label;
     const char* value;
+    uint16_t color = ui::theme::kTextPrimary;
   };
   Pair pairs[9];
   int n = 0;
@@ -300,7 +302,11 @@ void statusScreenDevice(const ui::DeviceStatus& status) {
   if (pct >= 0) {
     snprintf(battery, sizeof(battery),
              hw::batteryCharging() ? "%d%% charging" : "%d%%", pct);
-    pairs[n++] = {"Battery", battery};
+    // Green while charging: colour only where it means a state.
+    pairs[n++] = {"Battery", battery,
+                  hw::batteryCharging() ? ui::theme::kGood
+                                        : pct <= 20 ? ui::theme::kError
+                                                    : ui::theme::kTextPrimary};
   }
   pairs[n++] = {"Up", up};
   if (status.connected) {
@@ -351,7 +357,7 @@ void statusScreenDevice(const ui::DeviceStatus& status) {
   y += title_h / 2 + ui::theme::kStatusLineGap + line_h / 2;
   for (int i = 0; i < n; ++i) {
     drawPairLine(gfx, pairs[i].label, pairs[i].value, y,
-                 ui::theme::kStatusBodyTextPx);
+                 ui::theme::kStatusBodyTextPx, pairs[i].color);
     y += line_h;
   }
 

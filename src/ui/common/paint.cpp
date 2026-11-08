@@ -415,6 +415,69 @@ void roundCorners(int x, int y, int size, float r, uint16_t outside) {
   }
 }
 
+void triangle(float x0, float y0, float x1, float y1, float x2, float y2,
+              uint16_t color) {
+  Target t;
+  if (!target(t, nullptr)) {
+    return;
+  }
+  auto edge = [](float ax, float ay, float bx, float by, float px, float py) {
+    return (bx - ax) * (py - ay) - (by - ay) * (px - ax);
+  };
+  const int xa = std::max(t.x0, static_cast<int>(floorf(std::min({x0, x1, x2}))));
+  const int ya = std::max(t.y0, static_cast<int>(floorf(std::min({y0, y1, y2}))));
+  const int xb = std::min(t.x1, static_cast<int>(ceilf(std::max({x0, x1, x2}))) + 1);
+  const int yb = std::min(t.y1, static_cast<int>(ceilf(std::max({y0, y1, y2}))) + 1);
+  for (int py = ya; py < yb; ++py) {
+    for (int px = xa; px < xb; ++px) {
+      int hits = 0;
+      for (int sy = 0; sy < 4; ++sy) {
+        const float fy = py + (sy + 0.5f) * 0.25f;
+        for (int sx = 0; sx < 4; ++sx) {
+          const float fx = px + (sx + 0.5f) * 0.25f;
+          const float d0 = edge(x0, y0, x1, y1, fx, fy);
+          const float d1 = edge(x1, y1, x2, y2, fx, fy);
+          const float d2 = edge(x2, y2, x0, y0, fx, fy);
+          const bool neg = d0 < 0.0f || d1 < 0.0f || d2 < 0.0f;
+          const bool pos = d0 > 0.0f || d1 > 0.0f || d2 > 0.0f;
+          hits += neg && pos ? 0 : 1;
+        }
+      }
+      if (hits != 0) {
+        plot(t, px, py, color, static_cast<uint32_t>(hits * 16));
+      }
+    }
+  }
+}
+
+void noteTile(int x, int y, int size, float radius) {
+  roundRect(x, y, size, size, radius, 0x2965);  // #2C2C2E
+  const float s = static_cast<float>(size);
+  const float cx = x + s * 0.5f;
+  const float cy = y + s * 0.5f;
+  constexpr uint16_t kNote = 0x8C71;  // #8E8E93
+  const float head = s * 0.085f;
+  const float stem = std::max(1.5f, s * 0.035f);
+  const float lx = cx - s * 0.11f;
+  const float rx = cx + s * 0.15f;
+  const float hy = cy + s * 0.16f;
+  const float top = cy - s * 0.2f;
+  disc(lx - head * 0.6f, hy, head, kNote);
+  disc(rx - head * 0.6f, hy - s * 0.03f, head, kNote);
+  roundRect(lx + head * 0.4f - stem, top, stem, hy - top, stem * 0.5f, kNote);
+  roundRect(rx + head * 0.4f - stem, top, stem, hy - s * 0.03f - top,
+            stem * 0.5f, kNote);
+  roundRect(lx + head * 0.4f - stem, top, rx - lx + stem, s * 0.075f,
+            s * 0.02f, kNote);
+}
+
+void bolt(float x, float y, float w, float h, uint16_t color) {
+  triangle(x + 0.62f * w, y, x + 0.12f * w, y + 0.58f * h, x + 0.52f * w,
+           y + 0.58f * h, color);
+  triangle(x + 0.48f * w, y + 0.42f * h, x + 0.88f * w, y + 0.42f * h,
+           x + 0.38f * w, y + h, color);
+}
+
 void mask(int x, int y, int w, int h, const uint8_t* coverage,
           uint16_t color) {
   Target t;
@@ -510,7 +573,7 @@ void coverBackdrop(int x, int y, int size, int radius) {
       }
     }
   }
-  constexpr float kSaturate = 1.35f;
+  constexpr float kSaturate = 1.65f;
   for (int gy = 0; gy < kGrid; ++gy) {
     for (int gx = 0; gx < kGrid; ++gx) {
       float* c = s_grid.c[gy][gx];
@@ -546,31 +609,13 @@ void plainBackdrop(int x, int y, int size, int radius) {
   for (int gy = 0; gy < kGrid; ++gy) {
     for (int gx = 0; gx < kGrid; ++gx) {
       for (int ch = 0; ch < 3; ++ch) {
-        s_grid.c[gy][gx][ch] = ch == 2 ? 52.0f : 46.0f;  // a cool dark grey
+        s_grid.c[gy][gx][ch] = 46.0f;  // a neutral dark grey
       }
     }
   }
   fillFromGrid(t, s_grid, 1.0f, 0.30f);
   shadow(t, x, y, size, radius);
-  roundRect(x, y, size, size, radius, 0x2965);  // #2C2C2E
-  // Two beamed quavers, as Apple's placeholder: heads, stems, a beam.
-  const float s = static_cast<float>(size);
-  const float cx = x + s * 0.5f;
-  const float cy = y + s * 0.5f;
-  constexpr uint16_t kNote = 0x8C71;  // #8E8E93
-  const float head = s * 0.085f;
-  const float stem = s * 0.035f;
-  const float lx = cx - s * 0.11f;
-  const float rx = cx + s * 0.15f;
-  const float hy = cy + s * 0.16f;
-  const float top = cy - s * 0.2f;
-  disc(lx - head * 0.6f, hy, head, kNote);
-  disc(rx - head * 0.6f, hy - s * 0.03f, head, kNote);
-  roundRect(lx + head * 0.4f - stem, top, stem, hy - top, stem * 0.5f, kNote);
-  roundRect(rx + head * 0.4f - stem, top, stem, hy - s * 0.03f - top,
-            stem * 0.5f, kNote);
-  roundRect(lx + head * 0.4f - stem, top, rx - lx + stem, s * 0.075f,
-            s * 0.02f, kNote);
+  noteTile(x, y, size, radius);
 }
 
 }  // namespace ui::paint

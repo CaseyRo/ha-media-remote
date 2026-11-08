@@ -33,6 +33,17 @@ void arc(float cx, float cy, float r, float half_thick, float deg0, float deg1,
 void disc(float cx, float cy, float r, uint16_t color, uint8_t alpha = 255,
           const Clip* clip = nullptr);
 
+/** A filled triangle, its edges supersampled. */
+void triangle(float x0, float y0, float x1, float y1, float x2, float y2,
+              uint16_t color);
+
+/** Apple's placeholder for missing art: a `size` tile of radius `radius` at
+ *  (x, y) with two beamed quavers on it. */
+void noteTile(int x, int y, int size, float radius);
+
+/** A lightning bolt in the `w` x `h` box at (x, y): charging. */
+void bolt(float x, float y, float w, float h, uint16_t color);
+
 /** A filled rectangle with corners of radius `r`. */
 void roundRect(float x, float y, float w, float h, float r, uint16_t color,
                uint8_t alpha = 255);

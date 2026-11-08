@@ -404,7 +404,7 @@ void drawKeyboard(lgfx::LovyanGFX& gfx) {
   displayFontApplyHeight(gfx, theme::kKeyTextPx);
   gfx.setTextDatum(textdatum_t::middle_center);
   gfx.setTextColor(ready ? theme::kBackground : theme::kTextMuted);
-  gfx.drawString("JOIN", theme::kCenterX, theme::kSearchGoY);
+  gfx.drawString("Join", theme::kCenterX, theme::kSearchGoY);
 }
 
 Result pressKey(char key) {

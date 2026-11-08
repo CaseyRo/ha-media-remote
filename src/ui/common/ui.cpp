@@ -1562,9 +1562,16 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
       paint::roundRect(x + inset, top + inset, fill, ch - 2 * inset,
                        ch * 0.2f, level_color);
     }
+    if (charging) {
+      // Apple's bolt over the cell: a green fill alone reads as "healthy".
+      const float bh = ch * 0.9f;
+      const float bw = bh * 0.62f;
+      paint::bolt(x + (cell_w - bw) / 2.0f, y - bh / 2.0f, bw, bh,
+                  theme::kTextPrimary);
+    }
     x += cell_w + nub_w + gap;
     gfx.setTextDatum(textdatum_t::middle_left);
-    gfx.setTextColor(theme::kTextSecondary);
+    gfx.setTextColor(theme::kNpSecondary);
     gfx.drawString(label, x, y);
   }
 }

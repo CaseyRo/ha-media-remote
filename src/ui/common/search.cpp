@@ -208,7 +208,7 @@ void drawKeyboard(lgfx::LovyanGFX& gfx) {
   displayFontApplyHeight(gfx, theme::kKeyTextPx);
   gfx.setTextDatum(textdatum_t::middle_center);
   gfx.setTextColor(ready ? theme::kBackground : theme::kTextMuted);
-  gfx.drawString("SEARCH", theme::kCenterX, theme::kSearchGoY);
+  gfx.drawString("Search", theme::kCenterX, theme::kSearchGoY);
 }
 
 constexpr int kResultPitch = theme::kListRowHeight + theme::kListRowGap;
@@ -273,11 +273,15 @@ void drawResultRow(lgfx::LovyanGFX& gfx, int index, int top) {
   if (thumb > 0) {
     const int tx = x + (theme::kListRowHeight - thumb) / 2;
     const int ty = top + (theme::kListRowHeight - thumb) / 2;
-    if (artwork::draw(artwork::Kind::kSearch, index, gfx, tx, ty)) {
-      // Apple's small rounding on the art, where the row is in the frame.
-      if (ui::canvasPixels(gfx) != nullptr) {
-        paint::roundCorners(tx, ty, thumb, theme::px(4), theme::kSurface);
-      }
+    const bool in_frame = ui::canvasPixels(gfx) != nullptr;
+    const bool drawn =
+        artwork::draw(artwork::Kind::kSearch, index, gfx, tx, ty);
+    if (drawn && in_frame) {
+      paint::roundCorners(tx, ty, thumb, theme::px(4), theme::kSurface);
+    } else if (in_frame) {
+      paint::noteTile(tx, ty, thumb, theme::px(4));  // the slot keeps its place
+    }
+    if (drawn || in_frame) {
       const int used = tx + thumb + theme::kListThumbGap - text_x;
       text_x += used;
       text_w -= used;

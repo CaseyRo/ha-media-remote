@@ -264,7 +264,7 @@ constexpr int kSearchTypeHeight = px(20);
 constexpr int kSearchTypeTextPx = textPx(15);
 constexpr int kSearchTypePadX = px(10);
 /** The arrowhead after the label, and the room kept for it. */
-constexpr int kSearchTypeArrowW = px(8);
+constexpr int kSearchTypeArrowW = px(11);
 constexpr int kSearchTypeHitHalf = px(12);
 constexpr int kKeyRow0Y = px(72);
 constexpr int kKeyRowPitch = px(28);
@@ -308,6 +308,11 @@ int usableWidthAt(int y, int inset);
  *  or bottom of the glass keeps this much width and has its corners cut by
  *  the bezel, rather than pinching down to a sliver as it goes. */
 constexpr int kListRowMinHalfWidth = listPx(60);
+/** Widest a row's tile gets on a round panel: every row through the middle
+ *  shares this width, and so one text column, as Apple's grouped rows do;
+ *  only rows near the rim narrow with the glass. */
+constexpr int kListRowMaxHalfWidth =
+    board::kDisplayIsRound ? listPx(88) : kSize;
 
 /** Half the width of a list row's tile, `top` its first line and `height` its
  *  height: the chord at whichever of its edges sits further from the centre,
@@ -330,7 +335,8 @@ inline int listRowHalfWidth(int top, int height) {
   const int a = chordHalfWidth(first);
   const int b = chordHalfWidth(last);
   const int half = (a < b ? a : b) - kListRowInset;
-  return half > kListRowMinHalfWidth ? half : kListRowMinHalfWidth;
+  const int wide = half > kListRowMinHalfWidth ? half : kListRowMinHalfWidth;
+  return wide < kListRowMaxHalfWidth ? wide : kListRowMaxHalfWidth;
 }
 
 /**

@@ -51,6 +51,13 @@ float s_arc_drawn_level = -1.0f;
 uint32_t s_text_key = 0;
 bool s_text_key_valid = false;
 
+/** The cover as last seen, for a compose that finds its lock held, and a
+ *  redraw owed when the cover could not be drawn for it (takeCoverRetry). */
+bool s_known_has_art = false;
+uint32_t s_known_art = 0;
+bool s_cover_retry_owed = false;
+unsigned long s_cover_retry_since = 0;
+
 struct Button {
   Action action;
   int cx;
@@ -595,8 +602,20 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
   // -- a decode and a full-frame blur -- and a play, a pause or a volume step
   // touches none of them. Two frames, so a title that changes over the same
   // cover -- a radio stream -- redraws only the text.
-  const bool has_art = ui::cover::hasArt();
-  const uint32_t art = has_art ? ui::cover::identity() : 0;
+  // Never waiting on the cover's lock: the worker can hold it for seconds
+  // while it decodes a thumbnail, and every touch would wait with it.
+  bool has_art = s_known_has_art;
+  uint32_t art = s_known_art;
+  if (ui::cover::tryState(has_art, art)) {
+    s_known_has_art = has_art;
+    s_known_art = art;
+  } else {
+    s_cover_retry_owed = true;  // look again once the worker lets go
+    s_cover_retry_since = millis();
+  }
+  if (!has_art) {
+    art = 0;
+  }
   const uint32_t with_text = trackTextKey(art, has_art, state);
   bool over_art = has_art;
   if (ui::canvasRestoreBackdrop(ui::Backdrop::kArtAndText, with_text)) {
@@ -607,8 +626,13 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
     if (!over_art && has_art) {
       gfx.fillScreen(theme::kBackground);
       uint32_t t0 = millis();
-      over_art = ui::cover::draw(gfx, theme::kNpCoverX, theme::kNpCoverY,
-                                 theme::kNpCoverSize);
+      bool busy = false;
+      over_art = ui::cover::tryDraw(gfx, theme::kNpCoverX, theme::kNpCoverY,
+                                    theme::kNpCoverSize, busy);
+      if (busy) {
+        s_cover_retry_owed = true;
+        s_cover_retry_since = millis();
+      }
       perf::record("np.coverDecode", millis() - t0);
       if (over_art) {
         t0 = millis();
@@ -739,6 +763,14 @@ void refreshVolume(const PlayerState& state, float level) {
   drawVolumeArc(state, level, &clip);
   ui::canvasPresentRegion(x0, y0, w, h);
   s_arc_drawn_level = level;
+}
+
+bool takeCoverRetry() {
+  if (!s_cover_retry_owed || millis() - s_cover_retry_since < 300) {
+    return false;
+  }
+  s_cover_retry_owed = false;
+  return true;
 }
 
 bool volumeAvailable(const PlayerState& state) {

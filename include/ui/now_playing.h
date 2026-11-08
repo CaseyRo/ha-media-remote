@@ -28,6 +28,10 @@ void draw(const services::ha::PlayerState& state);
  *  text -- composed into the frame for standby. The caller presents it. */
 void composeStandby(const services::ha::PlayerState& state);
 
+/** True, once, a moment after a compose had to leave the cover out because
+ *  its lock was held: the caller repaints, and the cover goes in then. */
+bool takeCoverRetry();
+
 /** Repaint just the elapsed/total chip straight to the panel. It sits on an
  *  opaque pill for exactly this reason -- no recompose, so the cover art
  *  underneath is never decoded again. */

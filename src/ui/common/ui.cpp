@@ -1608,7 +1608,10 @@ bool artworkPending(const char* picture) {
   return artwork::coverPending(picture);
 }
 
-bool takeArtworkFinished() { return artwork::takeCoverFinished(); }
+bool takeArtworkFinished() {
+  // Or now playing left the cover out, its lock held, and wants it in now.
+  return artwork::takeCoverFinished() | now_playing::takeCoverRetry();
+}
 
 void clearArtwork() {
   cover::clear();

@@ -38,6 +38,15 @@ uint16_t highlight(uint16_t fallback);
  *  when it did not. False when there is nothing to draw. */
 bool draw(lgfx::LGFXBase& gfx, int x, int y, int diameter);
 
+/** As draw(), but never waits for the lock: when the worker holds it --
+ *  decoding a thumbnail, which can take seconds -- returns false at once with
+ *  `busy` set, and the caller draws without the cover and tries again. */
+bool tryDraw(lgfx::LGFXBase& gfx, int x, int y, int diameter, bool& busy);
+
+/** hasArt() and identity() together, without waiting for the lock: false,
+ *  leaving both alone, when it is held. */
+bool tryState(bool& has_art, uint32_t& id);
+
 void clear();
 
 /** Fetch the image at `url` and decode it into `gfx`, fitted inside a `size`

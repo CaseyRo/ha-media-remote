@@ -472,6 +472,9 @@ ThumbConnection& thumbConnection() {
  *  anything larger decodes straight off the socket instead. PSRAM, claimed
  *  by the worker on its first fetch and never freed. */
 constexpr size_t kThumbBufferBytes = 64 * 1024;
+/** Past this a thumbnail is skipped: its decode would hold the lock for
+ *  seconds (a 2 MB PNG took 35, measured). */
+constexpr int kThumbMaxBytes = 384 * 1024;
 uint8_t* s_thumb_buffer = nullptr;
 
 /** Host and port out of an http(s) URL, the way HTTPClient will read them.
@@ -947,9 +950,39 @@ bool upscaleInto(uint16_t* dst, int x, int y, int diameter, float scale) {
 
 }  // namespace
 
+bool drawLocked(lgfx::LGFXBase& gfx, int x, int y, int diameter);
+
 bool draw(lgfx::LGFXBase& gfx, int x, int y, int diameter) {
   Guard guard;
+  return drawLocked(gfx, x, y, diameter);
+}
 
+bool tryDraw(lgfx::LGFXBase& gfx, int x, int y, int diameter, bool& busy) {
+  busy = false;
+  if (s_mutex != nullptr && xSemaphoreTake(s_mutex, 0) != pdTRUE) {
+    busy = true;  // the worker is decoding a thumbnail: try again shortly
+    return false;
+  }
+  const bool drawn = drawLocked(gfx, x, y, diameter);
+  if (s_mutex != nullptr) {
+    xSemaphoreGive(s_mutex);
+  }
+  return drawn;
+}
+
+bool tryState(bool& has_art, uint32_t& id) {
+  if (s_mutex != nullptr && xSemaphoreTake(s_mutex, 0) != pdTRUE) {
+    return false;
+  }
+  has_art = hasArtLocked();
+  id = identityLocked();
+  if (s_mutex != nullptr) {
+    xSemaphoreGive(s_mutex);
+  }
+  return true;
+}
+
+bool drawLocked(lgfx::LGFXBase& gfx, int x, int y, int diameter) {
   if (!hasArtLocked() || diameter <= 0) {
     return false;
   }
@@ -1138,7 +1171,7 @@ bool fetchThumb(lgfx::LGFXBase& gfx, const char* url, int x, int y,
                                 0, 0, 0.0f, 0.0f, datum_t::middle_center)
                   : gfx.drawJpg(s_thumb_buffer, sink.length(), x, y, size, size,
                                 0, 0, 0.0f, 0.0f, datum_t::middle_center);
-    } else if (content_length <= static_cast<int>(config::kCoverArtMaxBytes)) {
+    } else if (content_length <= kThumbMaxBytes) {
       // Larger than the thumbnail buffer: into one of its own first, then
       // decoded. Never decoded straight off the socket any more -- the lock is
       // held for a decode and now playing waits on it, so a slow download
@@ -1176,7 +1209,9 @@ bool fetchThumb(lgfx::LGFXBase& gfx, const char* url, int x, int y,
       }
       heap_caps_free(big);
     } else {
-      LOG_WARN("Art: %d bytes is past the hard limit, skipping %s",
+      // A picture this size for an 88 px thumbnail is a full-size original:
+      // decoding it holds the lock now playing draws under for many seconds.
+      LOG_WARN("Art: %d bytes is too large for a thumbnail, skipping %s",
                content_length, target.c_str());
       conn.close();
       conn.http.end();

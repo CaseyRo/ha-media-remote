@@ -46,6 +46,10 @@ This release shows Korean -- artist names and track titles in Hangul, drawn from
 
 ### Fixed
 
+- **The remote no longer stops answering while the list loads.** Opening the swipe-up list waited for Music Assistant on the loop that reads the touch screen -- 15 s measured -- and for any preload already under way. It now shows its loading card at once and fills in when the poll task has the list; back and other swipes work meanwhile.
+- **List thumbnails no longer stall now playing.** A thumbnail too big for its buffer was decoded straight off the network under the lock now playing draws with, and a full-size original could hold it for 19 to 35 s. Large ones are downloaded first and only decoded under the lock, those over 384 KB are skipped, and now playing no longer waits on that lock at all: it draws without the cover and tries again a moment later.
+- **`/perf` on the portal** shows where the loop's time goes, with each stretch's longest run and every run over 200 ms, which is how the two stalls above were found.
+
 - **A swipe down from the very top of a round panel** no longer switches the volume device on: a finger coming on from the bezel is read sliding along the rim at first, and the volume took that for a sideways drag. A press that lands at the rim now has to go plainly sideways before it moves the volume.
 
 ## [1.4.0] - 2026-10-30

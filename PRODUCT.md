@@ -55,10 +55,11 @@ changes the puck.
   over QSPI in even-aligned windows; nothing draws on the glass directly. A
   full compose (cover decode, scrim, blur) is the expensive part, so screens
   compose on change and push small regions for small updates.
-- Text: VLW faces rendered natively per pixel size, never scaled; Noto Sans,
-  with Korean drawn from an outline font. Each extra size costs flash, and
-  LovyanGFX copies each glyph onto the 8 KB loop stack, so very large type
-  needs care.
+- Text: VLW faces rendered natively per pixel size, never scaled; Inter on
+  the AMOLED (29 px Medium, 33 px Regular, 39 px SemiBold), Noto Sans on the
+  other boards, Korean drawn from an outline font. Each extra size costs
+  flash, and LovyanGFX copies each glyph onto the 8 KB loop stack, so very
+  large type needs care.
 - Power: rich when awake, frugal on standby and idle. Standby is now playing
   without its controls at panel brightness 25; the screen blanks after five
   minutes idle; Wi-Fi uses modem sleep.

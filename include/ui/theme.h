@@ -52,8 +52,10 @@ constexpr uint16_t kStatusPlainText = 0xFFFF;
 // where it means a state -- no brand accent. "Accent" is white, so a pressed
 // or primary control is a white pill with black text, as on watchOS.
 constexpr uint16_t kBackground = 0x0000;       // black
-constexpr uint16_t kSurface = 0x18E3;          // #1C1C1E, a cell
-constexpr uint16_t kSurfaceRaised = 0x2965;    // #2C2C2E, raised / current
+// Neutral in RGB565: Apple's #1C1C1E and #2C2C2E land a step green there
+// (green has the extra bit), so these take the green a step down.
+constexpr uint16_t kSurface = 0x18C3;          // #1C1C1E as #181818, a cell
+constexpr uint16_t kSurfaceRaised = 0x2945;    // #2C2C2E as #292929
 constexpr uint16_t kAccent = 0xFFFF;           // white
 constexpr uint16_t kTextPrimary = 0xFFFF;
 constexpr uint16_t kTextSecondary = 0xA534;    // white at about 65%

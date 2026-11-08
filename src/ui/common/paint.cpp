@@ -451,7 +451,7 @@ void triangle(float x0, float y0, float x1, float y1, float x2, float y2,
 }
 
 void noteTile(int x, int y, int size, float radius) {
-  roundRect(x, y, size, size, radius, 0x2965);  // #2C2C2E
+  roundRect(x, y, size, size, radius, theme::kSurfaceRaised);
   const float s = static_cast<float>(size);
   const float cx = x + s * 0.5f;
   const float cy = y + s * 0.5f;

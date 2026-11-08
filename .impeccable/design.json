@@ -1,0 +1,402 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-08T10:29:52+00:00",
+  "title": "Design System: Puck 1 (ha-media-remote, round AMOLED)",
+  "extensions": {
+    "colorMeta": {
+      "ground-black": {
+        "role": "neutral",
+        "displayName": "Ground Black",
+        "canonical": "RGB565 0x0000",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "surface-cell": {
+        "role": "neutral",
+        "displayName": "Cell Charcoal",
+        "canonical": "RGB565 0x18C3",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised Charcoal",
+        "canonical": "RGB565 0x2945",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "text-primary": {
+        "role": "primary",
+        "displayName": "White",
+        "canonical": "RGB565 0xFFFF",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Secondary Grey",
+        "canonical": "RGB565 0xA534",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "text-secondary-on-blur": {
+        "role": "neutral",
+        "displayName": "Secondary Grey on Blur",
+        "canonical": "RGB565 0xBDF7",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Grey",
+        "canonical": "RGB565 0x630C",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "glyph-pressed": {
+        "role": "neutral",
+        "displayName": "Pressed Grey",
+        "canonical": "RGB565 0x8C71",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "volume-muted": {
+        "role": "neutral",
+        "displayName": "Muted Volume Grey",
+        "canonical": "RGB565 0x8410",
+        "tonalRamp": [
+          "#0A0A0B",
+          "#1C1C1E",
+          "#2C2C2E",
+          "#48484A",
+          "#636366",
+          "#8E8E93",
+          "#BDBDBD",
+          "#F2F2F7"
+        ]
+      },
+      "state-good": {
+        "role": "state",
+        "displayName": "System Green",
+        "canonical": "RGB565 0x368B",
+        "tonalRamp": [
+          "#0B3317",
+          "#125224",
+          "#1A7232",
+          "#239441",
+          "#30D158",
+          "#5EDC7E",
+          "#96E8AA",
+          "#CDF4D6"
+        ]
+      },
+      "state-warning": {
+        "role": "state",
+        "displayName": "System Orange",
+        "canonical": "RGB565 0xFCE1",
+        "tonalRamp": [
+          "#3D2500",
+          "#663E00",
+          "#8F5700",
+          "#C77A00",
+          "#FF9F0A",
+          "#FFB547",
+          "#FFCE85",
+          "#FFE7C2"
+        ]
+      },
+      "state-error": {
+        "role": "state",
+        "displayName": "System Red",
+        "canonical": "RGB565 0xFA27",
+        "tonalRamp": [
+          "#3D0F0C",
+          "#661914",
+          "#8F231C",
+          "#C73027",
+          "#FF453A",
+          "#FF7068",
+          "#FF9E98",
+          "#FFCFCB"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "Now-playing title (two lines max), status titles, search query. VLW data/ui_font_39.vlw, textPx(20)."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Artist, row names, page titles, setting names, status lines, keys. VLW data/ui_font_33.vlw, textPx(17)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Times, top line, list headings, setting values, type pill. VLW data/ui_font_29.vlw, textPx(15)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "cover-shadow",
+        "value": "rounded-box shadow, offset y 5% of cover (8px), feather 13% (21px), 50% black at the square, quadratic falloff",
+        "purpose": "Under the sharp cover (or note tile) on now playing and standby only."
+      }
+    ],
+    "grounds": [
+      {
+        "name": "blurred-cover",
+        "value": "12x12 pooled grid, 2x [1 2 1] each axis, saturation 1.65, bilinear upscale, keep_top = clamp(100/brightest, 0.30, 0.62), foot = 0.68 x top, 4x4 Bayer dither to RGB565",
+        "purpose": "Ground of now playing and standby."
+      },
+      {
+        "name": "plain-ground",
+        "value": "grey 46/255, keep 1.0 top to 0.30 foot, dithered",
+        "purpose": "No-cover ground, with the note tile in the cover's place."
+      }
+    ],
+    "overlays": [
+      {
+        "name": "volume-track",
+        "value": "white alpha 52/255, 4px ring r 225-229, 270deg",
+        "purpose": "Takes the cover's colour."
+      },
+      {
+        "name": "scrubber-track",
+        "value": "white alpha 64/255; fill white alpha 240/255",
+        "purpose": "Scrubber, 240x6px fully rounded."
+      },
+      {
+        "name": "scroll-track",
+        "value": "white alpha 40/255, 3px arc r 225; thumb Secondary Grey",
+        "purpose": "List scroll indicator at the right rim."
+      },
+      {
+        "name": "battery-cell-outline",
+        "value": "white alpha 90/255",
+        "purpose": "Standby battery cell and nub."
+      }
+    ],
+    "motion": [
+      {
+        "name": "sleep-wake-fade",
+        "value": "8 brightness steps x 18 ms (~150 ms), controller brightness only, no redraw",
+        "purpose": "The only motion in the system."
+      }
+    ],
+    "antialiasing": "Every ring, disc, rounded rect, glyph and cover corner is coverage-blended into the frame (ui/paint.h: 4x4 supersampled triangles and masks, signed-distance corners) or drawn with LovyanGFX fillSmooth*; never hard-edged.",
+    "scale": "Tokens authored at 240 px; theme::px()/textPx() x 1.9417 on the 466 px panel. Values here are at 466 px.",
+    "breakpoints": [
+      {
+        "name": "round-466",
+        "value": "466px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Now Playing Cover",
+      "kind": "custom",
+      "refersTo": "cover-now-playing",
+      "description": "Sharp cover top centre on its own blurred ground, soft shadow, 14px corners; same place on standby.",
+      "html": "<div class=\"ds-np\"><div class=\"ds-np-cover\"></div><div class=\"ds-np-title\">Over the Hills and Far Away</div><div class=\"ds-np-artist\">Led Zeppelin</div></div>",
+      "css": ".ds-np{width:466px;height:466px;border-radius:50%;background:radial-gradient(circle at 50% 20%,#7a4a2a,#3a2a20 60%,#1e1812);display:flex;flex-direction:column;align-items:center;font-family:Inter,sans-serif;color:#fff}.ds-np-cover{margin-top:41px;width:163px;height:163px;border-radius:14px;background:linear-gradient(135deg,#d9774a,#6b5a48);box-shadow:0 8px 21px rgba(0,0,0,.5)}.ds-np-title{margin-top:12px;font-weight:600;font-size:34px;line-height:39px;text-align:center;max-width:340px}.ds-np-artist{font-size:29px;line-height:33px;color:#BDBDBD;margin-top:2px}"
+    },
+    {
+      "name": "Transport Glyph",
+      "kind": "button",
+      "refersTo": "",
+      "description": "Plain filled glyph, no disc; dims to #8E8E93 while pressed.",
+      "html": "<button class=\"ds-glyph\" aria-label=\"Play\"><svg width=\"36\" height=\"42\" viewBox=\"0 0 36 42\"><path d=\"M0 0L36 21L0 42Z\" fill=\"currentColor\"/></svg></button>",
+      "css": ".ds-glyph{background:none;border:none;color:#fff;padding:29px;cursor:pointer}.ds-glyph:active{color:#8E8E93}.ds-glyph:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:50%}"
+    },
+    {
+      "name": "List Row",
+      "kind": "card",
+      "refersTo": "list-row",
+      "description": "Inset grouped row: charcoal, 19px corners, 74px thumbnail slot that keeps its place.",
+      "html": "<div class=\"ds-row\"><div class=\"ds-row-thumb\"></div><span>Toni Braxton</span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:19px;width:342px;height:89px;padding:0 8px;box-sizing:border-box;background:#1C1C1E;border-radius:19px;color:#fff;font:400 28px/33px Inter,sans-serif}.ds-row-thumb{width:74px;height:74px;border-radius:8px;background:#2C2C2E;flex-shrink:0}.ds-row:active{background:#fff;color:#000}"
+    },
+    {
+      "name": "Settings Row",
+      "kind": "card",
+      "refersTo": "list-row-current",
+      "description": "Name over value, centred; current row raised, pressed row white.",
+      "html": "<div class=\"ds-set\"><div class=\"ds-set-name\">Wi-Fi network</div><div class=\"ds-set-val\">MDR24ghz</div></div>",
+      "css": ".ds-set{width:342px;height:89px;background:#2C2C2E;border-radius:19px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:Inter,sans-serif}.ds-set-name{color:#fff;font-size:28px}.ds-set-val{color:#A4A6A4;font-weight:500;font-size:24px}.ds-set:active{background:#fff}.ds-set:active .ds-set-name,.ds-set:active .ds-set-val{color:#000}"
+    },
+    {
+      "name": "Back Button",
+      "kind": "nav",
+      "refersTo": "back-button",
+      "description": "Raised charcoal disc with a white chevron, 86px hit circle.",
+      "html": "<button class=\"ds-back\" aria-label=\"Back\"><svg width=\"16\" height=\"20\" viewBox=\"0 0 16 20\"><path d=\"M12 2L4 10L12 18\" stroke=\"currentColor\" stroke-width=\"4\" fill=\"none\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></button>",
+      "css": ".ds-back{width:42px;height:42px;border-radius:50%;background:#2C2C2E;color:#fff;border:none;display:flex;align-items:center;justify-content:center}.ds-back:focus-visible{outline:2px solid #fff;outline-offset:2px}"
+    },
+    {
+      "name": "Key",
+      "kind": "button",
+      "refersTo": "key",
+      "description": "Search keyboard key.",
+      "html": "<button class=\"ds-key\">A</button>",
+      "css": ".ds-key{width:52px;height:50px;border-radius:10px;background:#1C1C1E;color:#fff;border:none;font:400 28px Inter,sans-serif}.ds-key:active{background:#fff;color:#000}.ds-key:focus-visible{outline:2px solid #fff}"
+    },
+    {
+      "name": "Search Key (ready)",
+      "kind": "button",
+      "refersTo": "key-primary-ready",
+      "description": "The one primary control: white with black text once there is a query; charcoal with muted label when empty.",
+      "html": "<button class=\"ds-go\">Search</button>",
+      "css": ".ds-go{width:252px;height:54px;border-radius:10px;background:#fff;color:#000;border:none;font:400 28px Inter,sans-serif}.ds-go:disabled{background:#1C1C1E;color:#636366}.ds-go:focus-visible{outline:2px solid #fff;outline-offset:2px}"
+    },
+    {
+      "name": "Search Type Pill",
+      "kind": "chip",
+      "refersTo": "search-type-pill",
+      "description": "Steps Artist / Album / Track / Playlist / Radio on a tap.",
+      "html": "<button class=\"ds-pill\">Artist &#9656;</button>",
+      "css": ".ds-pill{height:39px;padding:0 19px;border-radius:9999px;background:#1C1C1E;color:#fff;border:none;font:500 24px Inter,sans-serif}.ds-pill:active{background:#2C2C2E}"
+    },
+    {
+      "name": "Status Pair Line",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "Grey label, white value; value takes a state colour only for a state.",
+      "html": "<div class=\"ds-pair\"><span class=\"ds-pair-l\">Battery</span> <span class=\"ds-pair-v ds-good\">49% charging</span></div>",
+      "css": ".ds-pair{background:#000;padding:8px;text-align:center;font:400 28px Inter,sans-serif}.ds-pair-l{color:#A4A6A4}.ds-pair-v{color:#fff}.ds-good{color:#30D158}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cover Is the Screen",
+    "overview": "**Creative North Star: \"The Cover Is the Screen\"**\n\nThis is Apple Music's Now Playing as it looks on Apple Watch, at desk scale, played straight. The album cover fills the round glass twice. First as the ground: the whole cover blurred, a little more saturated and darkened. Then sharp at the top centre, with small rounded corners and a soft shadow. Everything else is white Inter set straight on that ground. The title and artist sit under the cover, with a thin scrubber, three plain filled glyphs, and one thin white volume ring at the rim. No cards, panels or chrome surround the controls. Leaving the cover behind, the world turns into Apple's dark system UI: black ground, inset grouped rows in charcoal greys, white text, and grey secondary text. Colour appears only to report a state. Because black pixels on the AMOLED are off, the round edge of the glass is the only frame the design has.\n\nThe device is glanced at from arm's length or across a desk, so legibility beats density. Type is large for a watch-like face (title 39 px, body 33 px), and the cover was made smaller than the mock so the type could grow. Motion is limited to the panel's own sleep and wake fade.",
+    "keyCharacteristics": [
+      "The blurred, darkened cover is the ground of now playing and standby. With no cover, a neutral dark ground and a music-note tile take its place.",
+      "The sharp cover keeps one position (163 px square at the top centre, y 41) on both now playing and standby.",
+      "White Inter at three weights. Secondary text is grey, with a brighter grey on the blur.",
+      "Every curve and edge on the frame is anti-aliased, and every smooth field is dithered.",
+      "Off now playing: black ground, charcoal inset grouped rows, a white pill for the primary or pressed control.",
+      "No brand accent. Green, orange and red mean charging, degraded and error or low battery, and nothing else."
+    ],
+    "rules": [
+      {
+        "name": "The Colour Means State Rule",
+        "body": "Hue appears only when it reports a state: green for charging, orange for degraded, red for error or low battery. Nothing else is coloured, whether decoration, emphasis, links or selection. Selection is Raised Charcoal, and pressed is white.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Brand Accent Rule",
+        "body": "The accent is white. Never add a brand hue or tint controls from the cover. The cover's colour lives only in the blurred ground.",
+        "section": "colors"
+      },
+      {
+        "name": "The Step Down Before Cut Rule",
+        "body": "Where a single line will not fit, step down one size before ellipsizing. The whole name at the smaller size beats half of it at the larger. Example: the status page title drops from 39 to 33.",
+        "section": "typography"
+      },
+      {
+        "name": "The Two Lines Then Ellipsis Rule",
+        "body": "The title wraps to two lines at most and then ellipsizes. Every line is clipped to the chord of the circle at its own y.",
+        "section": "typography"
+      },
+      {
+        "name": "The Cover Never Moves Rule",
+        "body": "The cover's size and position are identical on now playing and standby. Only the controls leave. Any change to one layout is a change to both.",
+        "section": "layout"
+      },
+      {
+        "name": "The No Text Glow Rule",
+        "body": "Text on the blur gets no shadow, glow, halo or scrim. The adaptive darkening is what makes white text legible. If a cover defeats it, tune the darkening, never the text.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Tonal Step Rule",
+        "body": "Off now playing, raise by stepping grey (black, then Cell Charcoal, then Raised Charcoal), never by shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "**Do** set the blurred, darkened cover as the ground of now playing and standby, and the neutral dark ground with the note tile when there is no cover.",
+      "**Do** keep the cover at 163 px, top centre, y 41, on both now playing and standby.",
+      "**Do** anti-alias every ring, line, glyph, rounded corner and disc that goes on the frame (`ui/paint.h`, or `fillSmooth*`), and ordered-dither (4 x 4 Bayer) every smooth gradient field, because RGB565 bands otherwise.",
+      "**Do** use colour only for state: System Green for charging, System Orange for degraded, System Red for error and low battery.",
+      "**Do** keep list and settings rows at one shared width through the middle, with one text column and a thumbnail slot that keeps its place.",
+      "**Do** show a press by dimming the glyph to Pressed Grey, or by turning a row or key white with black text.",
+      "**Do** step text down one embedded size before ellipsizing a single-line name.",
+      "**Do** write labels in sentence case (\"Search\", \"Off here\")."
+    ],
+    "donts": [
+      "**Don't** put a shadow, glow, halo or scrim behind text on the blurred cover. Tune the ground's darkening instead.",
+      "**Don't** put panels, cards, pills or discs behind anything on now playing. The rooms line, times and glyphs sit straight on the blur.",
+      "**Don't** add a brand accent or tint controls with the cover's colour. The accent is white.",
+      "**Don't** add motion: no transitions, bounces, slides or animated crossfades beyond the existing sleep/wake fade. A cover crossfade on track change is allowed only if it costs no response time, and none ships today.",
+      "**Don't** move the cover between now playing and standby, or bring back the speaker's name: the puck only ever has its one player.",
+      "**Don't** draw hard-edged (LovyanGFX non-smooth) shapes on the round frame, or leave a smooth gradient undithered.",
+      "**Don't** fill a whole screen with a state colour. Alerts are black, with the title in the state's colour.",
+      "**Don't** add a new type size or weight without embedding its VLW face for this board and keeping `platformio.ini` and the font table in step."
+    ]
+  }
+}

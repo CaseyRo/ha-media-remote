@@ -1,5 +1,8 @@
 #include "ui/theme.h"
 
+#include "ui/canvas.h"
+#include "ui/paint.h"
+
 #include <cmath>
 
 namespace ui::theme {
@@ -43,12 +46,21 @@ void drawScrollIndicator(lgfx::LovyanGFX& gfx, float offset, float visible) {
   // A short arc on the bezel. There is no straight edge on this panel to
   // hang a bar from, and a bar inset far enough to stay on the glass would
   // cut across the rows instead of bounding them.
+  const float span = kTrackSpan * visible;
+  const float start = kTrackStartDeg + (kTrackSpan - span) * offset;
+  if (ui::canvasPixels(gfx) != nullptr) {
+    // watchOS's: a thin rounded line at the rim, its track barely there.
+    const float r = (kListScrollInnerRadius + kListScrollOuterRadius) / 2.0f;
+    const float half = px(1) * 0.75f;
+    ui::paint::arc(kCenterX, kCenterY, r, half, kTrackStartDeg, kTrackEndDeg,
+                   0xFFFF, 40);
+    ui::paint::arc(kCenterX, kCenterY, r, half, start, start + span,
+                   kTextSecondary);
+    return;
+  }
   gfx.fillArc(kCenterX, kCenterY, kListScrollInnerRadius,
               kListScrollOuterRadius, kTrackStartDeg, kTrackEndDeg,
               kArcTrack);
-
-  const float span = kTrackSpan * visible;
-  const float start = kTrackStartDeg + (kTrackSpan - span) * offset;
   gfx.fillArc(kCenterX, kCenterY, kListScrollInnerRadius,
               kListScrollOuterRadius, start, start + span, kAccent);
 }

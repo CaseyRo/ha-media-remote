@@ -156,9 +156,9 @@ constexpr int kNpScrubHeight = px(3);
 /** A sideways drag starting this close above or below the scrubber, or past
  *  its ends, seeks. */
 constexpr int kNpSeekBandHalf = px(16);
-constexpr int kNpTimesY = px(184);
+constexpr int kNpTimesY = px(183);
 constexpr int kNpTimesTextPx = textPx(15);
-constexpr int kNpTransportY = px(208);
+constexpr int kNpTransportY = px(211);
 constexpr int kNpTransportSpacing = px(54);
 constexpr int kNpPlayHalfHeight = px(11);
 constexpr int kNpSkipHalfHeight = px(8);
@@ -294,7 +294,7 @@ constexpr int kSearchResultTopY = px(48);
 
 // --- Status / message screens ---
 constexpr int kStatusLineGap = px(6);
-constexpr int kStatusTitleTextPx = textPx(24);
+constexpr int kStatusTitleTextPx = textPx(20);
 constexpr int kStatusBodyTextPx = textPx(17);
 
 /** Half-width of the circle at a given y -- how much horizontal room a row of

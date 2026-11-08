@@ -246,7 +246,9 @@ after the address, with *charging* while it charges; the portal answers it at
 for checking a layout from the desk; it holds the remote for about a second
 while it sends, so fetch it once, not on a loop. `/frame?hash=1` answers a
 checksum of the screen in milliseconds, for noticing it changed. `/perf`
-answers where the loop's time went, longest runs first kept.
+answers where the loop's time went, longest runs first kept, and
+`/show?s=list` (or `settings`, `status`, `search`, `players`, `now`) puts that
+screen up, for a look with `/frame`.
 
 The page refreshes every second. The **gear** at the top right, across the
 title row from the back button, opens

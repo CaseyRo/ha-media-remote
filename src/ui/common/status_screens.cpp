@@ -338,6 +338,10 @@ void statusScreenDevice(const ui::DeviceStatus& status) {
       name_w = right > left ? right - left : 0;
     }
     displayFontApplyHeight(gfx, ui::theme::kStatusTitleTextPx);
+    if (gfx.textWidth(status.hostname) > name_w) {
+      // A step down before cutting it: the whole name beats a bigger half.
+      displayFontApplyHeight(gfx, ui::theme::textPx(17));
+    }
     gfx.setTextDatum(textdatum_t::middle_center);
     gfx.setTextColor(ui::theme::kTextPrimary);
     char name[ui::text::kMaxLineLen];

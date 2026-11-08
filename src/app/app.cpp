@@ -42,6 +42,8 @@
 #include "services/recommend.h"
 #include "services/ha_client.h"
 #include "services/search.h"
+#include <WebServer.h>
+
 #include "services/wifi_setup.h"
 #include "ui/ui.h"
 
@@ -3037,6 +3039,37 @@ void haPollTask(void*) {
 
 }  // namespace
 
+/** /show?s=list|settings|status|search|players|now on the portal: put a
+ *  screen up from the desk, to look at it with /frame, without touching the
+ *  glass. Runs on the loop (the web server does), as a tap would. */
+void registerShowPage() {
+  wifiAddWebPage("/show", [](WebServer& server) {
+    const String s = server.arg("s");
+    if (ui::isDimmed()) {
+      ui::undim();  // standby would draw itself in the screen's place
+    }
+    g_np_since_ms = millis();  // as if it had just come up: no standby yet
+    if (s == "list") {
+      openBrowse();
+    } else if (s == "settings") {
+      openSettings();
+    } else if (s == "status") {
+      openStatus();
+    } else if (s == "search") {
+      openSearch();
+    } else if (s == "players") {
+      openPlayers();
+    } else if (s == "now") {
+      showNowPlaying();
+    } else {
+      server.send(404, "text/plain",
+                  "s= list, settings, status, search, players or now");
+      return;
+    }
+    server.send(200, "text/plain", "ok");
+  });
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -3053,6 +3086,7 @@ void setup() {
   esp_log_level_set("mdns", ESP_LOG_NONE);
 
   g_state_mutex = xSemaphoreCreateMutex();
+  registerShowPage();
 
   // The portal reports what it is doing; this is where those events become
   // screens. Everything below the app layer is written against no display.

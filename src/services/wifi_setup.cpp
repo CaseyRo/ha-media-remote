@@ -54,8 +54,9 @@ struct WebPage {
   const char* path = nullptr;
   void (*handler)(WebServer& server) = nullptr;
 };
-/** /ha, /HA, /battery, /imu, /perf, /frame, /show: seven, and room for one. */
-WebPage s_web_pages[8];
+/** /ha, /HA, /battery, /imu, /perf, /frame, /show, /sleep: eight, and room
+ *  for two. */
+WebPage s_web_pages[10];
 
 /** True while wifiSetupConnect() waits in the setup portal. */
 bool s_in_setup_portal = false;
@@ -1937,6 +1938,13 @@ void wifiResetCredentialsAndReboot() {
   delay(800);
   esp_restart();
 }
+
+void wifiSleep() {
+  WiFi.setAutoReconnect(false);
+  WiFi.mode(WIFI_OFF);
+}
+
+void wifiResume() { startStaConnect("", ""); }
 
 bool wifiReconnect() {
   hw::bootButtonInit();

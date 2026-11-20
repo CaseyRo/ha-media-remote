@@ -24,6 +24,10 @@ int batteryPercent();
 /** True while the battery is charging. */
 bool batteryCharging();
 
+/** True while USB-C power is in (the AXP2101's VBUS good), charging or
+ *  full. */
+bool batteryOnUsb();
+
 /** True once for each short press of the PWR key since the last call; a
  *  long press stays the power manager's own, switching the board off. Reads
  *  the bus at most every 100 ms, so call it as often as touch is read. */

@@ -449,6 +449,12 @@ constexpr unsigned long kStandbyOffMs = 300000;
 /** The CPU's clock while the panel is dark, on a board with a battery: a
  *  third of 240, and Wi-Fi still runs. */
 constexpr uint32_t kBlankedCpuMhz = 80;
+/** Dark this long on battery, the chip sleeps with Wi-Fi off, waking every
+ *  kSleepCheckMs to look at the IMU and PWR; a lift, PWR or BOOT wakes it,
+ *  as does USB-C power. 0 never sleeps. Longer than kHaServiceTimeoutMs, so
+ *  a command sent as it went dark -- face down's pause -- is through. */
+constexpr unsigned long kSleepAfterDarkMs = 30000;
+constexpr uint64_t kSleepCheckMs = 500;
 /** The lock (PWR and BOOT together, on a board with both): how long the pair
  *  must be held to unlock, and how long a touch while locked shows how. */
 constexpr unsigned long kUnlockHoldMs = 1000;

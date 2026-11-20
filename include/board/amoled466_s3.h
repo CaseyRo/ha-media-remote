@@ -10,7 +10,7 @@
  * The board is a Waveshare ESP32-S3-Touch-AMOLED-1.75 (Rev 1.1, with an SD
  * card slot): ESP32-S3R8, 16 MB flash, 8 MB octal PSRAM, a CST9217 touch
  * controller, and on the same board an AXP2101 power manager, a QMI8658 IMU
- * and ES8311/ES7210 audio that this firmware does not use.
+ * and ES8311/ES7210 audio, the last of which this firmware does not use.
  *
  * The 1.75C builds from this header too, as env amoled466c-s3, which sets
  * BOARD_AMOLED466_175C. Its pins are the 1.75's but for its resets: the
@@ -56,6 +56,8 @@
 #define BOARD_PANEL_AMOLED 1
 /** An AXP2101 power manager on the touch bus, for hardware/battery.h. */
 #define BOARD_HAS_AXP2101 1
+/** A QMI8658 IMU on the touch bus, for hardware/motion.h. */
+#define BOARD_HAS_QMI8658 1
 
 namespace board {
 
@@ -136,8 +138,7 @@ constexpr uint8_t kDisplayDimBrightness = 25;
 // --- Touch: CST9217 capacitive controller (I2C) ----------------------------
 // Read by hand in hardware/amoled466/touch_raw.cpp: LovyanGFX's nearest
 // driver, Touch_CST226, speaks the same protocol but accepts only the
-// CST226's chip id. The bus is shared with the AXP2101 and the QMI8658,
-// neither of which this firmware talks to.
+// CST226's chip id. The bus is shared with the AXP2101 and the QMI8658.
 constexpr gpio_num_t kTouchPinSda = GPIO_NUM_15;
 constexpr gpio_num_t kTouchPinScl = GPIO_NUM_14;
 constexpr gpio_num_t kTouchPinInt = GPIO_NUM_11;
@@ -150,6 +151,13 @@ constexpr uint8_t kTouchI2cAddress = 0x5A;
 constexpr uint32_t kTouchI2cHz = 400000;
 /** The AXP2101, on the touch bus; read for the battery only. */
 constexpr uint8_t kPmuI2cAddress = 0x34;
+/** The QMI8658, on the touch bus; its accelerometer only, for lift to wake
+ *  and face down (hardware/motion.cpp). 0x6B as Waveshare's examples open
+ *  it; 0x6A is tried as well. */
+constexpr uint8_t kImuI2cAddress = 0x6B;
+/** +1 if the IMU's z axis points out of the screen, -1 if into it: lying
+ *  face up on a desk must read z = +1 g on the portal's /imu. */
+constexpr float kImuScreenOutZ = 1.0f;
 
 /** Raster the controller reports against. Waveshare sets it to the panel's
  *  466; touch_raw.cpp reads the controller's own figure at boot and scales
@@ -191,7 +199,7 @@ constexpr int kComposeSlabRows = 0;
 
 // --- Not used here ---------------------------------------------------------
 // I2S audio on 8/9/10/45 with its MCLK on 42 (16 on the 1.75C) and the
-// amplifier enable on 46, the QMI8658 on the touch bus, and on
+// amplifier enable on 46, the QMI8658's interrupt pins, and on
 // the 1.75 the SD card, on GPIO 1 and 2 among others. Listed so that nobody
 // reaches for one of those pins thinking it is spare.
 

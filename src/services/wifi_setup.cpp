@@ -54,7 +54,8 @@ struct WebPage {
   const char* path = nullptr;
   void (*handler)(WebServer& server) = nullptr;
 };
-WebPage s_web_pages[4];
+/** /ha, /HA, /battery, /imu, /perf, /frame, /show: seven, and room for one. */
+WebPage s_web_pages[8];
 
 /** True while wifiSetupConnect() waits in the setup portal. */
 bool s_in_setup_portal = false;
@@ -1898,6 +1899,7 @@ bool wifiAddWebPage(const char* path, void (*handler)(WebServer& server)) {
       return true;
     }
   }
+  LOG_WARN("Portal: no room for %s", path);
   return false;
 }
 

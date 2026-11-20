@@ -18,6 +18,7 @@
 #include "hardware/display.h"
 #include "hardware/display_font.h"
 #include "hardware/encoder.h"
+#include "hardware/motion.h"
 #include "hardware/touch.h"
 #include "services/browse.h"
 #include "services/search.h"
@@ -931,6 +932,21 @@ bool init(uint8_t rotation) {
       server.send(200, "application/json", body);
     });
   }
+  if (hw::motionInit()) {
+    // The accelerometer in g, screen-out positive on z: face up on a desk
+    // reads z near +1. For checking board::kImuScreenOutZ with no cable.
+    wifiAddWebPage("/imu", [](WebServer& server) {
+      float x = 0, y = 0, z = 0;
+      char body[64];
+      if (hw::motionLast(x, y, z)) {
+        snprintf(body, sizeof(body), "{\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}", x,
+                 y, z);
+      } else {
+        snprintf(body, sizeof(body), "{}");
+      }
+      server.send(200, "application/json", body);
+    });
+  }
   perf::registerPage();
   // The composed frame as a 24-bit BMP: a look at the screen without a camera,
   // for checking a layout from the desk. Read from the loop, as the web server
@@ -1009,6 +1025,10 @@ bool init(uint8_t rotation) {
 namespace {
 /** Standby is up in place of now playing: see dim(). */
 bool s_dimmed = false;
+/** When the panel last went dark or to standby. A lift in the next
+ *  kLiftQuietMs is the hand that put it there, not someone coming back. */
+unsigned long s_rest_ms = 0;
+constexpr unsigned long kLiftQuietMs = 2000;
 /** Whether it was charging when standby was last drawn. */
 bool s_drawn_charging = false;
 /** No touch acts: PWR and BOOT together set it, and the pair held clears it. */
@@ -1093,6 +1113,12 @@ Input poll(Screen screen, const PlayerState* state) {
   displayTick();
 #endif
 
+  // The IMU, read every pass, so neither is left over from before the
+  // screen rested.
+  const bool lifted =
+      hw::motionTakeLift() && millis() - s_rest_ms >= kLiftQuietMs;
+  const bool face_down = hw::motionTakeFaceDown();
+
   // The two buttons, on a board whose power manager reports PWR. Together
   // they lock the touch screen, or, held kUnlockHoldMs, unlock it -- one of
   // the two per press. The pair spends its press: letting go of PWR is no
@@ -1150,6 +1176,13 @@ Input poll(Screen screen, const PlayerState* state) {
     return out;
   }
 
+  // Turned face down: the app pauses and puts the screen to sleep.
+  if (face_down && !displayIsBlanked()) {
+    hw::touchCancel();
+    out.intent = Intent::kFaceDown;
+    return out;
+  }
+
   // A touch on a blanked panel, or on standby, only wakes it. Handled
   // before anything else reads the touch state, so the same press cannot
   // also press a button.
@@ -1161,7 +1194,8 @@ Input poll(Screen screen, const PlayerState* state) {
     // The knob wakes it as well, and its clicks and press are spent doing so.
     const bool turned = hw::encoderTakeDetents() != 0;
     const bool pressed = hw::encoderTakePress();
-    if (turned || pressed || hw::touchIsDown() || hw::touchPoll(discard)) {
+    if (lifted || turned || pressed || hw::touchIsDown() ||
+        hw::touchPoll(discard)) {
       if (s_dimmed) {
         s_dimmed = false;
         dimPanel(false);
@@ -1502,6 +1536,7 @@ bool isBlanked() { return displayIsBlanked(); }
 
 void blank() {
   s_dimmed = false;
+  s_rest_ms = millis();
   displayBlank();
 }
 
@@ -1579,6 +1614,7 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
 void dim(const PlayerState& state) {
   if (!s_dimmed) {
     dimPanel(true);
+    s_rest_ms = millis();
   }
   now_playing::composeStandby(state);
   drawStandbyStatus(canvas());

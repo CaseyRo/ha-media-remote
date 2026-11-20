@@ -68,6 +68,7 @@ enum class Intent : uint8_t {
   kCancelStart,       // back from the Starting... card: stop waiting for it
   kWokeFromTouch,     // a tap landed on a blanked panel and only woke it
   kSleep,             // the PWR key: the screen off until a touch or PWR
+  kFaceDown,          // turned face down: pause, and the screen off as kSleep
   kLock,              // PWR and BOOT together: the touch screen locked
   kUnlock,            // the pair held kUnlockHoldMs: unlocked
   kLockedTouch,       // a touch while locked, which did nothing

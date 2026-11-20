@@ -2499,6 +2499,21 @@ void portalIdle() {
   handleWifiIntent(in);
 }
 
+/** Turned over on the desk: what plays stops, and the screen sleeps as it
+ *  does for PWR, until it is turned up, lifted, touched or PWR. `state` is
+ *  handleInput()'s snapshot, in PSRAM: no second copy on the loop's stack. */
+[[gnu::noinline]] void sleepFaceDown(const PlayerState* state) {
+  if (state != nullptr && state->playback == PlaybackState::kPlaying) {
+    sendCommand(Intent::kPlayPause);  // sent as media_pause, as it plays
+  }
+  if (g_screen != Screen::kNowPlaying) {
+    showNowPlaying();
+  }
+  ui::blank();
+  g_asleep = true;
+  LOG_INFO("UI: asleep (face down)");
+}
+
 /** What handleInput() dispatches to is kept out of its frame
  *  ([[gnu::noinline]] on each handler): folded in, every handler's
  *  PlayerState copies made that frame three kilobytes, and it is still on the
@@ -2542,6 +2557,10 @@ void portalIdle() {
       ui::blank();
       g_asleep = true;
       LOG_INFO("UI: asleep (PWR)");
+      break;
+
+    case Intent::kFaceDown:
+      sleepFaceDown(have_state ? snapshot : nullptr);
       break;
 
     case Intent::kLock:

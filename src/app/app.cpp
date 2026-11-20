@@ -104,6 +104,8 @@ unsigned long g_np_since_ms = 0;
 /** The PWR key put the screen to sleep: only a touch or PWR again wakes it,
  *  not playback, as it would after the idle blank. Loop only. */
 bool g_asleep = false;
+/** When standby last came up, for kStandbyOffMs. Loop only. */
+unsigned long g_standby_since_ms = 0;
 /** Until when a touch while locked shows how to unlock; 0 when it is not.
  *  Loop only. */
 unsigned long g_lock_hint_until = 0;
@@ -2918,7 +2920,9 @@ void haPollTask(void*) {
           services::history::notePlaying(fresh.artist, fresh.track);
         }
 
-        interval = fresh.playback == PlaybackState::kPlaying
+        // Nobody is looking at a dark panel: the slower cadence will do.
+        interval = fresh.playback == PlaybackState::kPlaying &&
+                           !ui::isBlanked()
                        ? config::kHaPollPlayingMs
                        : config::kHaPollIdleMs;
       } else if (!streaming && !g_state_valid) {
@@ -3011,6 +3015,12 @@ void haPollTask(void*) {
     if (ui::dimStale()) {
       g_state_dirty = true;  // drawn again by showNowPlaying()
     }
+    if (config::kStandbyOffMs != 0 &&
+        millis() - g_standby_since_ms >= config::kStandbyOffMs) {
+      ui::blank();
+      g_asleep = true;  // as after PWR: playing on does not light it again
+      LOG_INFO("UI: asleep (standby untouched)");
+    }
     return;
   }
   if (config::kDimAfterMs == 0 || g_screen != Screen::kNowPlaying ||
@@ -3028,6 +3038,7 @@ void haPollTask(void*) {
   if (snapshotState(snapshot)) {
     markLock(snapshot);
     ui::dim(snapshot);
+    g_standby_since_ms = millis();
     LOG_INFO("UI: standby");
   }
 }

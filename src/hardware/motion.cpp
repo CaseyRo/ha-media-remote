@@ -43,9 +43,9 @@ constexpr float kLiftG = 0.15f;
 /** Armed by lying still this long, so a lift is a start of motion, not more
  *  of the same. */
 constexpr unsigned long kArmMs = 1500;
-/** Face down: screen-out z below this, held kFaceDownMs; turned up again once
+/** Face down: screen-out z below this (about 45 degrees past flat), held kFaceDownMs; turned up again once
  *  above kFaceUpZ. */
-constexpr float kFaceDownZ = -0.8f;
+constexpr float kFaceDownZ = -0.7f;
 constexpr float kFaceUpZ = -0.5f;
 constexpr unsigned long kFaceDownMs = 1000;
 

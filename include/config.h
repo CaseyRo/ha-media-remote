@@ -442,6 +442,13 @@ constexpr unsigned long kIdleTimeoutMs = 300000;
  *  a blanked panel. Blanking still follows kIdleTimeoutMs, from standby as
  *  from now playing. */
 constexpr unsigned long kDimAfterMs = 60000;
+/** Standby goes dark after this long untouched, music playing or not, and
+ *  stays dark as after PWR: a touch, a lift or PWR brings it back. 0 never
+ *  does. Standby is a lit cover, and lit for hours it was the battery. */
+constexpr unsigned long kStandbyOffMs = 300000;
+/** The CPU's clock while the panel is dark, on a board with a battery: a
+ *  third of 240, and Wi-Fi still runs. */
+constexpr uint32_t kBlankedCpuMhz = 80;
 /** The lock (PWR and BOOT together, on a board with both): how long the pair
  *  must be held to unlock, and how long a touch while locked shows how. */
 constexpr unsigned long kUnlockHoldMs = 1000;

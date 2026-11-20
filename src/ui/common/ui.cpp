@@ -923,12 +923,17 @@ bool init(uint8_t rotation) {
   hw::encoderInit();
   if (hw::batteryInit()) {
     // The battery over the network, for logging a run-down with no cable:
-    // {"percent":93,"charging":false}, percent -1 with no battery.
+    // {"percent":93,"charging":false,"cpu_mhz":240}, percent -1 with no
+    // battery.
     wifiAddWebPage("/battery", [](WebServer& server) {
-      char body[48];
-      snprintf(body, sizeof(body), "{\"percent\":%d,\"charging\":%s}",
+      // cpu_mhz 80 says the panel is dark (kBlankedCpuMhz), for logging a
+      // run-down against what the screen was doing.
+      char body[64];
+      snprintf(body, sizeof(body),
+               "{\"percent\":%d,\"charging\":%s,\"cpu_mhz\":%u}",
                hw::batteryPercent(),
-               hw::batteryCharging() ? "true" : "false");
+               hw::batteryCharging() ? "true" : "false",
+               static_cast<unsigned>(getCpuFrequencyMhz()));
       server.send(200, "application/json", body);
     });
   }
@@ -1538,12 +1543,18 @@ void blank() {
   s_dimmed = false;
   s_rest_ms = millis();
   displayBlank();
+#if defined(BOARD_HAS_AXP2101)
+  setCpuFrequencyMhz(config::kBlankedCpuMhz);
+#endif
 }
 
 void wake() {
   if (!displayIsBlanked()) {
     return;
   }
+#if defined(BOARD_HAS_AXP2101)
+  setCpuFrequencyMhz(240);
+#endif
   displayWake();
   // The touch that woke the screen must not also land on a control.
   hw::touchCancel();

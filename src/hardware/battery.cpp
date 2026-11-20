@@ -121,6 +121,11 @@ bool batteryCharging() {
   return status >= 0 && (status >> 5 & 0x03) == 0x01;
 }
 
+bool batteryOnUsb() {
+  const int status = s_ready ? readReg(kRegStatus1) : -1;
+  return status >= 0 && (status & 0x20) != 0;  // bit 5, VBUS good
+}
+
 namespace {
 
 /** Read the key's events, at most every kPowerKeyPollMs: a short press is
@@ -178,6 +183,7 @@ namespace hw {
 bool batteryInit() { return false; }
 int batteryPercent() { return -1; }
 bool batteryCharging() { return false; }
+bool batteryOnUsb() { return false; }
 bool powerKeyTakePress() { return false; }
 bool powerKeyHeld() { return false; }
 

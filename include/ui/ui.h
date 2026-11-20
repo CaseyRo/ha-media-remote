@@ -264,6 +264,12 @@ bool isBlanked();
 void blank();
 /** Bring the panel back and force a fresh frame. */
 void wake();
+/** With the panel dark, on a board with a battery: the chip in light sleep
+ *  and Wi-Fi off until a lift, PWR, BOOT or USB-C power, then the panel back
+ *  up and Wi-Fi rejoining in the background. On battery only, unless
+ *  `max_ms` (a test from the portal) puts a limit on it. False when it did
+ *  not sleep. */
+bool sleepWhileDark(unsigned long max_ms);
 
 /** Rest now playing as standby, or draw it again: the cover and the track
  *  text without the controls, the battery and the lock above them, the panel

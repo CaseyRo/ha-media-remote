@@ -9,6 +9,8 @@
 #include <WiFi.h>
 #include <esp_heap_caps.h>
 #include <esp_rom_crc.h>
+#include <esp_sleep.h>
+#include <driver/gpio.h>
 
 #include "board/board.h"
 #include "config.h"
@@ -928,11 +930,13 @@ bool init(uint8_t rotation) {
     wifiAddWebPage("/battery", [](WebServer& server) {
       // cpu_mhz 80 says the panel is dark (kBlankedCpuMhz), for logging a
       // run-down against what the screen was doing.
-      char body[64];
+      char body[80];
       snprintf(body, sizeof(body),
-               "{\"percent\":%d,\"charging\":%s,\"cpu_mhz\":%u}",
+               "{\"percent\":%d,\"charging\":%s,\"usb\":%s,"
+               "\"cpu_mhz\":%u}",
                hw::batteryPercent(),
                hw::batteryCharging() ? "true" : "false",
+               hw::batteryOnUsb() ? "true" : "false",
                static_cast<unsigned>(getCpuFrequencyMhz()));
       server.send(200, "application/json", body);
     });
@@ -1652,6 +1656,73 @@ void undim() {
     dimPanel(false);
   }
   s_dimmed = false;
+}
+
+bool sleepWhileDark(unsigned long max_ms) {
+#if defined(BOARD_HAS_AXP2101)
+  if (!displayIsBlanked() || (max_ms == 0 && hw::batteryOnUsb())) {
+    return false;
+  }
+  LOG_INFO("Sleep: Wi-Fi off");
+  Serial.flush();
+  wifiSleep();
+  // The panel's and the touch's resets and the panel's select held where they
+  // are, so neither is reset under the sleep.
+  const gpio_num_t held[] = {board::kDisplayPinRst, board::kTouchPinRst,
+                             board::kDisplayPinCs};
+  for (const gpio_num_t pin : held) {
+    gpio_hold_en(pin);
+  }
+  // BOOT wakes it at once; the IMU and PWR, on the AXP2101 and IMU over I2C,
+  // are looked at every kSleepCheckMs.
+  constexpr gpio_num_t kBoot = GPIO_NUM_0;
+  const bool boot_wake = !hw::bootButtonPressed();
+  if (boot_wake) {
+    gpio_wakeup_enable(kBoot, GPIO_INTR_LOW_LEVEL);
+    esp_sleep_enable_gpio_wakeup();
+  }
+  esp_sleep_enable_timer_wakeup(config::kSleepCheckMs * 1000ULL);
+  const unsigned long started = millis();
+  const char* why = "the test's time";
+  for (;;) {
+    esp_light_sleep_start();
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) {
+      why = "BOOT";
+      break;
+    }
+    if (hw::motionTakeLift()) {
+      why = "a lift";
+      break;
+    }
+    if (hw::powerKeyTakePress()) {
+      why = "PWR";
+      break;
+    }
+    if (max_ms == 0 && hw::batteryOnUsb()) {
+      why = "USB-C power";
+      break;
+    }
+    if (max_ms != 0 && millis() - started >= max_ms) {
+      break;
+    }
+    delay(1);  // the idle tasks a turn, for the watchdog
+  }
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+  if (boot_wake) {
+    gpio_wakeup_disable(kBoot);
+  }
+  for (const gpio_num_t pin : held) {
+    gpio_hold_dis(pin);
+  }
+  LOG_INFO("Sleep: woken by %s after %lu s", why,
+           (millis() - started) / 1000UL);
+  wifiResume();
+  wake();
+  return true;
+#else
+  (void)max_ms;
+  return false;
+#endif
 }
 
 // --- Artwork ---------------------------------------------------------------

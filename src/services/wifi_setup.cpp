@@ -54,8 +54,9 @@ struct WebPage {
   const char* path = nullptr;
   void (*handler)(WebServer& server) = nullptr;
 };
-/** /ha, /HA, /battery, /imu, /perf, /frame, /show: seven, and room for one. */
-WebPage s_web_pages[8];
+/** /ha, /HA, /battery, /imu, /perf, /frame, /show, /sleep: eight, and room
+ *  for two. */
+WebPage s_web_pages[10];
 
 /** True while wifiSetupConnect() waits in the setup portal. */
 bool s_in_setup_portal = false;
@@ -1360,6 +1361,10 @@ void ensureWifiManager() {
   WiFi.setHostname(services::device::name());
   s_wm.setHostname(services::device::name());
   s_wm.setAPCallback(onConfigPortalApStarted);
+  // An update arriving while the panel is dark finds the chip at 80 MHz
+  // (config::kBlankedCpuMhz), where a firmware upload timed out: full speed
+  // for it, and the restart after puts the clock back anyway.
+  s_wm.setPreOtaUpdateCallback([] { setCpuFrequencyMhz(240); });
   attachPortalParams(s_wm);
   s_wm_configured = true;
 }
@@ -1936,6 +1941,21 @@ void wifiResetCredentialsAndReboot() {
   notify(s_observer.settingsCleared);
   delay(800);
   esp_restart();
+}
+
+// The radio stopped, not the driver: WiFi.mode(WIFI_OFF) takes the driver
+// and its network interface down, and mDNS and the open sockets, left
+// pointing at the old one, brought the chip down a few seconds after the link
+// came back.
+void wifiSleep() {
+  WiFi.setAutoReconnect(false);
+  esp_wifi_disconnect();
+  esp_wifi_stop();
+}
+
+void wifiResume() {
+  esp_wifi_start();
+  startStaConnect("", "");
 }
 
 bool wifiReconnect() {

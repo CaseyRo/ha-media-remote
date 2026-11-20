@@ -148,6 +148,8 @@ bool dimStale() { return false; }
 bool isLocked() { return false; }
 void undim() {}
 
+bool sleepWhileDark(unsigned long) { return false; }
+
 void wake() {
   if (s_blanked) {
     s_blanked = false;

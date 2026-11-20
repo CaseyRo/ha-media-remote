@@ -104,6 +104,9 @@ unsigned long g_np_since_ms = 0;
 /** The PWR key put the screen to sleep: only a touch or PWR again wakes it,
  *  not playback, as it would after the idle blank. Loop only. */
 bool g_asleep = false;
+/** A sleep asked for from the portal's /sleep, and how long it may last;
+ *  0 when none is. Loop only. */
+unsigned long g_sleep_test_ms = 0;
 /** When standby last came up, for kStandbyOffMs. Loop only. */
 unsigned long g_standby_since_ms = 0;
 /** Until when a touch while locked shows how to unlock; 0 when it is not.
@@ -3043,6 +3046,60 @@ void haPollTask(void*) {
   }
 }
 
+/** Dark long enough on battery, and nothing still to send: the chip sleeps
+ *  with Wi-Fi off (ui::sleepWhileDark) until a lift, PWR, BOOT or USB-C
+ *  power. Awake again, it is as a touch on a dark panel, and Wi-Fi is given
+ *  its own time to come back before the Connecting card. Loop only. */
+[[gnu::noinline]] void handleSleep() {
+  static unsigned long s_dark_since = 0;
+  if (!ui::isBlanked()) {
+    s_dark_since = 0;
+    return;
+  }
+  if (s_dark_since == 0) {
+    s_dark_since = millis();
+  }
+  const unsigned long test_ms = g_sleep_test_ms;
+  if (test_ms == 0 && (config::kSleepAfterDarkMs == 0 ||
+                       millis() - s_dark_since < config::kSleepAfterDarkMs)) {
+    return;
+  }
+  if (g_turn_off_control ||
+      (g_command_jobs != nullptr && uxQueueMessagesWaiting(g_command_jobs))) {
+    return;
+  }
+  g_sleep_test_ms = 0;
+  if (!ui::sleepWhileDark(test_ms)) {
+    s_dark_since = millis();  // on USB-C power: asked again a while later
+    return;
+  }
+  s_dark_since = 0;
+  noteTouchWake();
+  g_wifi_down_since = millis();
+  g_last_reconnect_ms = millis();
+}
+
+/** /sleep?ms=15000 on the portal: dark and asleep now, for at most that long
+ *  (USB-C power or not), to try the sleep from the desk. A lift, PWR or BOOT
+ *  still ends it sooner. Runs on the loop, as the web server does. */
+void registerSleepPage() {
+  wifiAddWebPage("/sleep", [](WebServer& server) {
+    const long ms = server.arg("ms").toInt();
+    if (ms < 1000 || ms > 600000) {
+      server.send(400, "text/plain", "ms: 1000 to 600000");
+      return;
+    }
+    server.send(200, "text/plain", "sleeping");
+    server.client().flush();
+    delay(200);
+    if (!ui::isBlanked()) {
+      ui::blank();
+      g_asleep = true;
+    }
+    g_sleep_test_ms = static_cast<unsigned long>(ms);
+  });
+}
+
 /** Take the unlock hint down once kLockHintMs is up. Loop only. */
 [[gnu::noinline]] void handleLockHint() {
   if (g_lock_hint_until != 0 &&
@@ -3117,6 +3174,7 @@ void setup() {
 
   g_state_mutex = xSemaphoreCreateMutex();
   registerShowPage();
+  registerSleepPage();
 
   // The portal reports what it is doing; this is where those events become
   // screens. Everything below the app layer is written against no display.
@@ -3255,6 +3313,7 @@ void loop() {
 
   PERF_TIMED("handleLockHint", handleLockHint());
   PERF_TIMED("handleDimming", handleDimming());
+  PERF_TIMED("handleSleep", handleSleep());
   PERF_TIMED("handleElapsedTick", handleElapsedTick());
 
   perf::record("pass", millis() - pass_t0);

@@ -81,6 +81,12 @@ void wifiRequestJoin(const char* ssid, const char* password);
  *  before is rejoined, and false comes back. */
 bool wifiJoinNow(const char* ssid, const char* password);
 
+/** Wi-Fi off for a sleep, and the saved network rejoined after it, in the
+ *  background: wifiResume() returns at once, the link comes up a few seconds
+ *  later. */
+void wifiSleep();
+void wifiResume();
+
 /** Serve `handler` at `path` on the portal's web server, beside its own
  *  pages, whenever that server starts. Call before Wi-Fi comes up. A few
  *  slots; false when they are full. */

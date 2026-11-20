@@ -1,5 +1,8 @@
 #include "services/perf.h"
 
+#include <esp_system.h>
+
+
 #include <WebServer.h>
 
 #include <cstdio>
@@ -58,8 +61,12 @@ void registerPage() {
     String body;
     body.reserve(2048);
     char buf[96];
-    snprintf(buf, sizeof(buf), "{\"uptime_s\":%lu,\"slots\":{",
-             static_cast<unsigned long>(millis() / 1000));
+    // reset: esp_reset_reason() of the last start (1 power-on, 3 software,
+    // 4 panic, 5-7 watchdogs, 8 deep sleep, 9 brownout).
+    snprintf(buf, sizeof(buf),
+             "{\"uptime_s\":%lu,\"reset\":%d,\"slots\":{",
+             static_cast<unsigned long>(millis() / 1000),
+             static_cast<int>(esp_reset_reason()));
     body += buf;
     bool first = true;
     for (Slot& s : s_slots) {

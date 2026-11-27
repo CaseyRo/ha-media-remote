@@ -19,6 +19,7 @@
 #include "ui/peers_chip.h"
 #include "ui/text.h"
 #include "ui/theme.h"
+#include "ui/ui.h"
 
 // The round now playing, laid out as Apple Music's: the cover top centre on
 // its own blur, title and artist under it, a scrubber with elapsed and
@@ -268,6 +269,9 @@ const uint8_t* glyphMask(const Button& b, bool playing) {
   return mask;
 }
 
+/** How much of a control shows on the loading face. */
+constexpr uint8_t kWakingAlpha = 90;
+
 void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
                bool enabled) {
   const uint8_t* mask = glyphMask(b, isPlaying(state));
@@ -280,7 +284,10 @@ void drawGlyph(const Button& b, const PlayerState& state, bool pressed,
   const uint16_t color = !enabled ? theme::kTextMuted
                          : pressed ? 0x8C71  // #8E8E93
                                    : theme::kTextPrimary;
-  paint::mask(bx, by, bw, bh, mask, color);
+  // Waking: there, but not live yet. White at a third, so the cover's colour
+  // comes through and it reads as dimmed rather than as disabled grey.
+  paint::mask(bx, by, bw, bh, mask, color,
+              state.waking && enabled ? kWakingAlpha : 255);
 }
 
 // --- Volume ring ------------------------------------------------------------
@@ -399,6 +406,77 @@ void drawVolumeArc(const PlayerState& state, float level,
               255, clip);
 }
 
+// --- Loading arc -------------------------------------------------------------
+
+/** The loading face's arc: a short white stretch travelling the volume
+ *  ring's track, start to end, once a lap, entering and leaving by the ends
+ *  as the cover is the only thing it may not cross. In place of the level,
+ *  which is not known to be true until Home Assistant answers. */
+constexpr float kLoadingSegment = 50.0f / theme::kVolumeArcSweepDeg;
+/** How far into the wake the arc on screen was drawn for. */
+unsigned long s_loading_drawn_ms = 0;
+
+/** The stretch of the track, as fractions along it, `elapsed_ms` in. */
+void loadingSpan(unsigned long elapsed_ms, float& lo, float& hi) {
+  const float lap = static_cast<float>(elapsed_ms % config::kWakeLoadingLapMs) /
+                    config::kWakeLoadingLapMs;
+  const float head = lap * (1.0f + kLoadingSegment);
+  lo = std::max(0.0f, head - kLoadingSegment);
+  hi = std::min(1.0f, head);
+}
+
+void drawLoadingArc(unsigned long elapsed_ms, const paint::Clip* clip) {
+  const float r =
+      (theme::kVolumeArcInnerRadius + theme::kVolumeArcOuterRadius) / 2.0f;
+  const float half =
+      (theme::kVolumeArcOuterRadius - theme::kVolumeArcInnerRadius) / 2.0f;
+  paint::arc(theme::kCenterX, theme::kCenterY, r, half,
+             theme::kVolumeArcStartDeg, theme::kVolumeArcEndDeg, 0xFFFF, 52,
+             clip);
+  float lo = 0.0f;
+  float hi = 0.0f;
+  loadingSpan(elapsed_ms, lo, hi);
+  if (hi - lo > 0.004f) {
+    paint::arc(theme::kCenterX, theme::kCenterY, r, half,
+               theme::kVolumeArcStartDeg + theme::kVolumeArcSweepDeg * lo,
+               theme::kVolumeArcStartDeg + theme::kVolumeArcSweepDeg * hi,
+               0xFFFF, 255, clip);
+  }
+  s_loading_drawn_ms = elapsed_ms;
+}
+
+/** Grow the box [x0, x1] x [y0, y1] to take in the ring from `from` to `to`
+ *  along it, walked, since a stretch can bulge outside its two ends' box. */
+void growRingBox(float from, float to, int& x0, int& y0, int& x1, int& y1) {
+  const int steps = 1 + static_cast<int>((to - from) * 64.0f);
+  for (int i = 0; i <= steps; ++i) {
+    int x = 0;
+    int y = 0;
+    volumePoint(from + (to - from) * i / steps, x, y);
+    x0 = x < x0 ? x : x0;
+    y0 = y < y0 ? y : y0;
+    x1 = x > x1 ? x : x1;
+    y1 = y > y1 ? y : y1;
+  }
+}
+
+/** Put back the kept ring backdrop inside the box. */
+void restoreRing(lgfx::LovyanGFX& gfx, int x0, int y0, int x1, int y1) {
+  int spans[2][2];
+  for (int row = y0; row <= y1; ++row) {
+    const int n = ringSpans(row, spans);
+    for (int i = 0; i < n; ++i) {
+      const int a = spans[i][0] > x0 ? spans[i][0] : x0;
+      const int b = spans[i][1] < x1 ? spans[i][1] : x1;
+      if (a <= b) {
+        gfx.pushImage(a, row, b - a + 1, 1,
+                      s_arc_backdrop + static_cast<size_t>(row) * theme::kSize +
+                          a);
+      }
+    }
+  }
+}
+
 // --- Scrubber and times -----------------------------------------------------
 
 /** Where the line under the scrubber is while it says the token was
@@ -459,9 +537,11 @@ void drawScrubber(lgfx::LovyanGFX& gfx, const PlayerState& state) {
   const float h = theme::kNpScrubHeight;
   const float y = theme::kNpScrubY - h / 2.0f;
   if (f >= 0.0f) {
-    paint::roundRect(kScrubLeft, y, kScrubWidth, h, h / 2.0f, 0xFFFF, 64);
+    paint::roundRect(kScrubLeft, y, kScrubWidth, h, h / 2.0f, 0xFFFF,
+                     state.waking ? 40 : 64);
     const float filled = std::max(h, kScrubWidth * f);
-    paint::roundRect(kScrubLeft, y, filled, h, h / 2.0f, 0xFFFF, 240);
+    paint::roundRect(kScrubLeft, y, filled, h, h / 2.0f, 0xFFFF,
+                     state.waking ? kWakingAlpha : 240);
   }
 
   displayFontApplyHeight(gfx, theme::kNpTimesTextPx);
@@ -490,7 +570,7 @@ void drawScrubber(lgfx::LovyanGFX& gfx, const PlayerState& state) {
   remaining[0] = '-';
   text::formatDuration(std::max(0.0f, state.duration_s - position),
                        remaining + 1, sizeof(remaining) - 1);
-  gfx.setTextColor(theme::kNpSecondary);
+  gfx.setTextColor(state.waking ? theme::kTextMuted : theme::kNpSecondary);
   gfx.setTextDatum(textdatum_t::middle_left);
   gfx.drawString(elapsed, kScrubLeft, theme::kNpTimesY);
   gfx.setTextDatum(textdatum_t::middle_right);
@@ -670,12 +750,21 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
   }
   if (volumeAvailable(state)) {
     saveArcBackdrop(gfx);
-    drawVolumeArc(state, state.volume, nullptr);
-    s_arc_drawn_level = state.volume;
+    if (state.waking) {
+      drawLoadingArc(s_loading_drawn_ms, nullptr);
+      s_arc_drawn_level = -1.0f;  // no knob on the ring to move from
+    } else {
+      drawVolumeArc(state, state.volume, nullptr);
+      s_arc_drawn_level = state.volume;
+    }
   } else {
     s_arc_backdrop_valid = false;
   }
-  ui::peers_chip::draw(gfx, state);
+  // The rooms line is the top line's; when it has nothing to say, a low
+  // battery takes it.
+  if (!ui::peers_chip::draw(gfx, state)) {
+    ui::drawLowBattery();
+  }
 }
 
 }  // namespace
@@ -725,16 +814,7 @@ void refreshVolume(const PlayerState& state, float level) {
   int y0 = theme::kSize;
   int x1 = -1;
   int y1 = -1;
-  const int steps = 1 + static_cast<int>((to - from) * 64.0f);
-  for (int i = 0; i <= steps; ++i) {
-    int x = 0;
-    int y = 0;
-    volumePoint(from + (to - from) * i / steps, x, y);
-    x0 = x < x0 ? x : x0;
-    y0 = y < y0 ? y : y0;
-    x1 = x > x1 ? x : x1;
-    y1 = y > y1 ? y : y1;
-  }
+  growRingBox(from, to, x0, y0, x1, y1);
   const int pad = theme::kVolumeKnobRadius + 2;
   x0 = x0 - pad < 0 ? 0 : x0 - pad;
   y0 = y0 - pad < 0 ? 0 : y0 - pad;
@@ -746,23 +826,39 @@ void refreshVolume(const PlayerState& state, float level) {
   // Only the ring was kept, and only the ring needs putting back: the arc and
   // the knob never draw outside it, and nothing else sits in it.
   lgfx::LovyanGFX& gfx = ui::canvas();
-  int spans[2][2];
-  for (int row = y0; row <= y1; ++row) {
-    const int n = ringSpans(row, spans);
-    for (int i = 0; i < n; ++i) {
-      const int a = spans[i][0] > x0 ? spans[i][0] : x0;
-      const int b = spans[i][1] < x1 ? spans[i][1] : x1;
-      if (a <= b) {
-        gfx.pushImage(a, row, b - a + 1, 1,
-                      s_arc_backdrop + static_cast<size_t>(row) * theme::kSize +
-                          a);
-      }
-    }
-  }
+  restoreRing(gfx, x0, y0, x1, y1);
   const paint::Clip clip{x0, y0, w, h};
   drawVolumeArc(state, level, &clip);
   ui::canvasPresentRegion(x0, y0, w, h);
   s_arc_drawn_level = level;
+}
+
+void refreshLoading(const PlayerState& state, unsigned long elapsed_ms) {
+  if (!state.waking || !s_arc_backdrop_valid || s_arc_drawn_level >= 0.0f) {
+    return;  // no ring kept, or the ring shows a level (a drag): leave it
+  }
+  // Only what the stretch left and what it now covers: across a lap's end
+  // that is both ends of the ring, still only the ring's pixels.
+  int x0 = theme::kSize;
+  int y0 = theme::kSize;
+  int x1 = -1;
+  int y1 = -1;
+  float lo = 0.0f;
+  float hi = 0.0f;
+  loadingSpan(s_loading_drawn_ms, lo, hi);
+  growRingBox(lo, hi, x0, y0, x1, y1);
+  loadingSpan(elapsed_ms, lo, hi);
+  growRingBox(lo, hi, x0, y0, x1, y1);
+  const int pad = theme::kVolumeKnobRadius + 2;
+  x0 = x0 - pad < 0 ? 0 : x0 - pad;
+  y0 = y0 - pad < 0 ? 0 : y0 - pad;
+  x1 = x1 + pad >= theme::kSize ? theme::kSize - 1 : x1 + pad;
+  y1 = y1 + pad >= theme::kSize ? theme::kSize - 1 : y1 + pad;
+  lgfx::LovyanGFX& gfx = ui::canvas();
+  restoreRing(gfx, x0, y0, x1, y1);
+  const paint::Clip clip{x0, y0, x1 - x0 + 1, y1 - y0 + 1};
+  drawLoadingArc(elapsed_ms, &clip);
+  ui::canvasPresentRegion(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
 }
 
 bool takeCoverRetry() {

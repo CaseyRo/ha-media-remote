@@ -131,6 +131,7 @@ void showWifiLost() { say("no Wi-Fi: signal lost"); }
 void showSettingsCleared() { say("settings cleared"); }
 
 void refreshElapsed(const services::ha::PlayerState&) {}
+void tickWaking(const services::ha::PlayerState&, unsigned long) {}
 
 bool isBlanked() { return s_blanked; }
 

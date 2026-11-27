@@ -42,6 +42,12 @@ void refreshElapsed(const services::ha::PlayerState& state);
  *  cost. */
 void refreshVolume(const services::ha::PlayerState& state, float level);
 
+/** While `state.waking`: move the loading face's arc on to where it is
+ *  `elapsed_ms` into the wake, repainting only the ring. A no-op where the
+ *  layout has no ring. */
+void refreshLoading(const services::ha::PlayerState& state,
+                    unsigned long elapsed_ms);
+
 /** True when the player exposes a volume the slider can drive. */
 bool volumeAvailable(const services::ha::PlayerState& state);
 

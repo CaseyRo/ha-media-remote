@@ -591,6 +591,8 @@ void compose(lgfx::LovyanGFX& gfx, const PlayerState& state,
 
 }  // namespace
 
+void refreshLoading(const PlayerState&, unsigned long) {}
+
 bool takeCoverRetry() { return false; }
 
 void composeStandby(const PlayerState& state) {

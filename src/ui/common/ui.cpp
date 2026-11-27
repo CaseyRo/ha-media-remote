@@ -1539,6 +1539,13 @@ void refreshElapsed(const PlayerState& state) {
   now_playing::refreshElapsed(state);
 }
 
+void tickWaking(const PlayerState& state, unsigned long elapsed_ms) {
+  if (s_seek_dragging) {
+    return;
+  }
+  now_playing::refreshLoading(state, elapsed_ms);
+}
+
 // --- Panel power -----------------------------------------------------------
 
 bool isBlanked() { return displayIsBlanked(); }
@@ -1564,13 +1571,13 @@ void wake() {
   hw::touchCancel();
 }
 
-/** Above the cover on standby: a padlock while locked, and the battery as a
- *  drawn cell with its percentage -- green while charging, red at a fifth or
- *  less -- on a board with one. */
-void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
+/** The top line: a padlock if `lock`, and the battery as a drawn cell with
+ *  its percentage -- green while charging, red at kBatteryLowPercent or
+ *  less -- on a board with one. Standby always; now playing when low. */
+void drawStatusLine(lgfx::LovyanGFX& gfx, bool lock) {
   const int pct = hw::batteryPercent();
   const bool charging = hw::batteryCharging();
-  if (pct < 0 && !s_locked) {
+  if (pct < 0 && !lock) {
     return;
   }
   const int y = theme::kNpTopLineY;
@@ -1579,7 +1586,7 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
   if (pct >= 0) {
     snprintf(label, sizeof(label), "%d%%", pct);
   }
-  const int lock_w = s_locked ? theme::px(7) : 0;
+  const int lock_w = lock ? theme::px(7) : 0;
   const int cell_w = pct >= 0 ? theme::px(12) : 0;
   const int nub_w = pct >= 0 ? theme::px(1) + 1 : 0;
   const int gap = theme::px(4);
@@ -1587,7 +1594,7 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
   const int total = lock_w + (lock_w && cell_w ? gap : 0) + cell_w + nub_w +
                     (text_w ? gap + text_w : 0);
   int x = theme::kCenterX - total / 2;
-  if (s_locked) {
+  if (lock) {
     // A padlock: the shackle as a half ring over a rounded body.
     const float bw = lock_w;
     const float bh = theme::px(5) + 1;
@@ -1600,9 +1607,10 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
   if (pct >= 0) {
     const float ch = theme::px(6);
     const float top = y - ch / 2.0f;
-    const uint16_t level_color = charging   ? theme::kGood
-                                 : pct <= 20 ? theme::kError
-                                             : theme::kTextPrimary;
+    const bool low = !charging && pct <= config::kBatteryLowPercent;
+    const uint16_t level_color = charging ? theme::kGood
+                                 : low    ? theme::kError
+                                          : theme::kTextPrimary;
     paint::roundRect(x, top, cell_w, ch, ch * 0.3f, 0xFFFF, 90);
     paint::roundRect(x + cell_w + 1, y - ch * 0.2f, nub_w, ch * 0.4f,
                      nub_w * 0.5f, 0xFFFF, 90);
@@ -1621,9 +1629,20 @@ void drawStandbyStatus(lgfx::LovyanGFX& gfx) {
     }
     x += cell_w + nub_w + gap;
     gfx.setTextDatum(textdatum_t::middle_left);
-    gfx.setTextColor(theme::kNpSecondary);
+    // Low, the figure goes red with the cell: it is the warning, and a
+    // red sliver alone is easy to miss at arm's length.
+    gfx.setTextColor(low ? theme::kError : theme::kNpSecondary);
     gfx.drawString(label, x, y);
   }
+}
+
+bool drawLowBattery() {
+  const int pct = hw::batteryPercent();
+  if (pct < 0 || hw::batteryCharging() || pct > config::kBatteryLowPercent) {
+    return false;
+  }
+  drawStatusLine(canvas(), false);
+  return true;
 }
 
 void dim(const PlayerState& state) {
@@ -1632,7 +1651,7 @@ void dim(const PlayerState& state) {
     s_rest_ms = millis();
   }
   now_playing::composeStandby(state);
-  drawStandbyStatus(canvas());
+  drawStatusLine(canvas(), s_locked);
   canvasPresent();
   s_drawn_charging = hw::batteryCharging();
   s_dimmed = true;

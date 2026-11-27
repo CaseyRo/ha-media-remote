@@ -35,7 +35,7 @@ bool offHere(const services::ha::PlayerState& state) {
 
 }  // namespace
 
-void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
+bool draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
   // "Off in this room" in the chip's place, in amber: a state to notice, not
   // a control of its own. It sits in the top half, where a tap switches the
   // volume device on, so it is not a hit target -- the tap goes through and
@@ -44,7 +44,7 @@ void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
   const bool off_here = offHere(state);
   s_shown = !off_here && state.peer_count > 0;
   if (!s_shown && !off_here) {
-    return;
+    return false;
   }
   char label[24];
   if (off_here) {
@@ -71,6 +71,7 @@ void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state) {
                    : kPlain ? theme::kTextSecondary
                             : theme::kAccent);
   gfx.drawString(label, theme::kCenterX, kChipY);
+  return true;
 }
 
 bool hit(int x, int y) {

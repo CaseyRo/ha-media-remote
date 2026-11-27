@@ -19,8 +19,9 @@
 namespace ui::peers_chip {
 
 /** Draw the chip if `state` has other rooms on its input, or "Off in this
- *  room" if its volume device is off while it plays; remember where. */
-void draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state);
+ *  room" if its volume device is off while it plays; remember where. True
+ *  when something was drawn. */
+bool draw(lgfx::LovyanGFX& gfx, const services::ha::PlayerState& state);
 
 /** Whether (x, y) is on the rooms chip as last drawn -- false when none
  *  was, or when the chip says "Off in this room". */

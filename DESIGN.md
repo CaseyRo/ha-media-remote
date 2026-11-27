@@ -143,7 +143,7 @@ Apple's dark system palette, monochrome by design. White and greys carry everyth
 ### State
 - **System Green** (state-good): charging. Used for the battery cell fill on standby and the battery value on the status page.
 - **System Orange** (state-warning): degraded. Used for setup and alert titles, "Off here" on the top line, and warnings in the times line.
-- **System Red** (state-error): failed or low. Used for the battery at 20% or less.
+- **System Red** (state-error): failed or low. Used for the battery at 15% or less and not charging (cell and figure), on standby and on now playing's top line.
 
 ### Named Rules
 **The Colour Means State Rule.** Hue appears only when it reports a state: green for charging, orange for degraded, red for error or low battery. Nothing else is coloured, whether decoration, emphasis, links or selection. Selection is Raised Charcoal, and pressed is white.
@@ -173,7 +173,7 @@ Sizes are line heights (ascent plus descent), produced by `theme::textPx()` from
 The panel is a 466 px circle, and every horizontal measure is a chord: `theme::chordHalfWidth(y)` gives the room at any row, and text is clipped to it less an inset. Everything is centred on x 233.
 
 **Now playing, top to bottom:**
-- Top line at y 21. Awake, it is the rooms line as plain text ("+2 rooms", or "Off here" in orange). On standby it is the battery.
+- Top line at y 21. Awake, it is the rooms line as plain text ("+2 rooms", or "Off here" in orange). On standby it is the battery; on now playing the battery takes it, red, at 15% or less when the rooms line has nothing to say.
 - Cover: 163 px square, top centre, y 41 to 204.
 - Title and artist, centred together in the band from y 212 to 324. The artist is 2 px under the title.
 - Scrubber at y 334: 240 px wide, 6 px tall, fully rounded.
@@ -253,7 +253,7 @@ Same shape as list rows. The text is centred, watchOS's way round: the setting's
 - **Plain cards:** black ground, white title, Secondary Grey detail.
 
 ### Motion
-The only motion is the panel's brightness fade on sleep and wake: 8 steps over about 150 ms, sent as controller brightness commands with no redraw. Everything else changes in a single frame.
+The only motion is the panel's brightness fade on sleep and wake: 8 steps over about 150 ms, sent as controller brightness commands with no redraw. One more, chosen by Casey on 27 Nov 2026: the loading face after a wake from sleep. Until Home Assistant answers (4-7 s, 15 s at most), the scrubber and the three glyphs show at a third, and a 50 degree white stretch travels the volume ring's track, start to end, once every 1.6 s, in place of the level. Taps made meanwhile are held and sent when it answers. Everything else changes in a single frame.
 
 ## Do's and Don'ts
 
@@ -271,7 +271,7 @@ The only motion is the panel's brightness fade on sleep and wake: 8 steps over a
 - **Don't** put a shadow, glow, halo or scrim behind text on the blurred cover. Tune the ground's darkening instead.
 - **Don't** put panels, cards, pills or discs behind anything on now playing. The rooms line, times and glyphs sit straight on the blur.
 - **Don't** add a brand accent or tint controls with the cover's colour. The accent is white.
-- **Don't** add motion: no transitions, bounces, slides or animated crossfades beyond the existing sleep/wake fade. A cover crossfade on track change is allowed only if it costs no response time, and none ships today.
+- **Don't** add motion: no transitions, bounces, slides or animated crossfades beyond the existing sleep/wake fade and the loading face's travelling arc. A cover crossfade on track change is allowed only if it costs no response time, and none ships today.
 - **Don't** move the cover between now playing and standby, or bring back the speaker's name: the puck only ever has its one player.
 - **Don't** draw hard-edged (LovyanGFX non-smooth) shapes on the round frame, or leave a smooth gradient undithered.
 - **Don't** fill a whole screen with a state colour. Alerts are black, with the title in the state's colour.

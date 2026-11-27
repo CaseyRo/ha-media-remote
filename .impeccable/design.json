@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-08T10:29:52+00:00",
+  "generatedAt": "2026-11-27T10:55:28+00:00",
   "title": "Design System: Puck 1 (ha-media-remote, round AMOLED)",
   "extensions": {
     "colorMeta": {
@@ -244,7 +244,12 @@
       {
         "name": "sleep-wake-fade",
         "value": "8 brightness steps x 18 ms (~150 ms), controller brightness only, no redraw",
-        "purpose": "The only motion in the system."
+        "purpose": "Panel brightness on sleep and wake."
+      },
+      {
+        "name": "loading-arc",
+        "value": "50 deg white stretch on the volume track (white at 52/255), one lap of the 270 deg track per 1600 ms, linear, 40 ms frames; controls at alpha 90 meanwhile",
+        "purpose": "The loading face after a wake from sleep, until Home Assistant answers (15 s at most). The only other motion in the system."
       }
     ],
     "antialiasing": "Every ring, disc, rounded rect, glyph and cover corner is coverage-blended into the frame (ui/paint.h: 4x4 supersampled triangles and masks, signed-distance corners) or drawn with LovyanGFX fillSmooth*; never hard-edged.",
@@ -339,7 +344,8 @@
       "White Inter at three weights. Secondary text is grey, with a brighter grey on the blur.",
       "Every curve and edge on the frame is anti-aliased, and every smooth field is dithered.",
       "Off now playing: black ground, charcoal inset grouped rows, a white pill for the primary or pressed control.",
-      "No brand accent. Green, orange and red mean charging, degraded and error or low battery, and nothing else."
+      "No brand accent. Green, orange and red mean charging, degraded and error or low battery, and nothing else.",
+      "Red battery (cell and figure) at 15% or less and not charging, on standby and on now playing's top line."
     ],
     "rules": [
       {
@@ -381,7 +387,7 @@
     "dos": [
       "**Do** set the blurred, darkened cover as the ground of now playing and standby, and the neutral dark ground with the note tile when there is no cover.",
       "**Do** keep the cover at 163 px, top centre, y 41, on both now playing and standby.",
-      "**Do** anti-alias every ring, line, glyph, rounded corner and disc that goes on the frame (`ui/paint.h`, or `fillSmooth*`), and ordered-dither (4 x 4 Bayer) every smooth gradient field, because RGB565 bands otherwise.",
+      "**Do** anti-alias every ring, line, glyph, rounded corner and disc that goes on the frame (`include/ui/paint.h`, or `fillSmooth*`), and ordered-dither (4 x 4 Bayer) every smooth gradient field, because RGB565 bands otherwise.",
       "**Do** use colour only for state: System Green for charging, System Orange for degraded, System Red for error and low battery.",
       "**Do** keep list and settings rows at one shared width through the middle, with one text column and a thumbnail slot that keeps its place.",
       "**Do** show a press by dimming the glyph to Pressed Grey, or by turning a row or key white with black text.",
@@ -392,7 +398,7 @@
       "**Don't** put a shadow, glow, halo or scrim behind text on the blurred cover. Tune the ground's darkening instead.",
       "**Don't** put panels, cards, pills or discs behind anything on now playing. The rooms line, times and glyphs sit straight on the blur.",
       "**Don't** add a brand accent or tint controls with the cover's colour. The accent is white.",
-      "**Don't** add motion: no transitions, bounces, slides or animated crossfades beyond the existing sleep/wake fade. A cover crossfade on track change is allowed only if it costs no response time, and none ships today.",
+      "**Don't** add motion: no transitions, bounces, slides or animated crossfades beyond the existing sleep/wake fade and the loading face's travelling arc. A cover crossfade on track change is allowed only if it costs no response time, and none ships today.",
       "**Don't** move the cover between now playing and standby, or bring back the speaker's name: the puck only ever has its one player.",
       "**Don't** draw hard-edged (LovyanGFX non-smooth) shapes on the round frame, or leave a smooth gradient undithered.",
       "**Don't** fill a whole screen with a state colour. Alerts are black, with the title in the state's colour.",

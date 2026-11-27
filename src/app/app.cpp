@@ -141,6 +141,11 @@ unsigned long g_waking_since_ms = 0;
 /** /show?s=waking: the loading face kept up its full time, Home Assistant
  *  answering or not, to look at it from the desk with /frame. */
 std::atomic<bool> g_waking_hold{false};
+/** Set on a wake: the poll task (the stream's owner) closes the event stream
+ *  and opens it again. A short sleep leaves it open on the face of it, and
+ *  with nothing changing nothing arrives on it, so the loading face would
+ *  wait out its whole time for a state that never came. */
+std::atomic<bool> g_stream_restart{false};
 
 /** The level last commanded on the control entity, and when -- or -1 when
  *  nothing is outstanding. Held behind g_state_mutex with g_state.
@@ -2893,6 +2898,10 @@ void haPollTask(void*) {
         services::browse::preload();
       }
 
+      if (g_stream_restart.exchange(false) && services::ha::streamIsOpen()) {
+        services::ha::streamClose();
+        stream_retry_at = millis();
+      }
       if (config::kHaStreamEnabled && !services::ha::streamIsOpen() &&
           static_cast<long>(millis() - stream_retry_at) >= 0) {
         // The backoff is not reset here: a server can take the connection
@@ -3097,6 +3106,7 @@ void haPollTask(void*) {
   s_dark_since = 0;
   g_waking_since_ms = millis();
   g_waking = true;
+  g_stream_restart = true;
   noteTouchWake();
   g_wifi_down_since = millis();
   g_last_reconnect_ms = millis();

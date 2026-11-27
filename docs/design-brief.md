@@ -48,3 +48,23 @@ FIRST VIEWPORT: now playing on the 466 px circle. Cover 163 px square, radius 14
 FORM: canon (the category standard, played straight), bar set by Apple Music, Apple Watch Now Playing and Music Assistant. seed:893a8695d492d2ca
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+
+## Addendum, 27 Nov 2026: loading and almost empty
+
+Shaped with Casey (impeccable shape, answers in Claude Code).
+
+1. **Loading** (the 4-7 s after a wake from sleep, until Home Assistant answers):
+   now playing as it was, the scrubber and three glyphs at a third (alpha 90,
+   so the blur shows through: dimmed, not disabled), and a 50 degree white
+   stretch travelling the volume ring's track once every 1.6 s in place of the
+   level. The one motion added beyond the sleep fade. "Offline" is not shown
+   while waking. Gives up after 15 s; the Wi-Fi cards take over from there.
+2. **Early taps** are held, in order, and sent the moment Home Assistant
+   answers (volume too), not dropped.
+3. **Almost empty**: at 15% or less and not charging (about a day at
+   0.65%/h), the battery cell and its figure go red, and now playing shows it
+   on the top line too, where standby already had it; the rooms line keeps the
+   top line when it has something to say. No card. Standby's red moved from
+   20% to the same 15%, so red means one thing.
+4. Desk tool: `/show?s=waking` holds the loading face its full 15 s for
+   `/frame`.

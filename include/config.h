@@ -455,6 +455,18 @@ constexpr uint32_t kBlankedCpuMhz = 80;
  *  a command sent as it went dark -- face down's pause -- is through. */
 constexpr unsigned long kSleepAfterDarkMs = 30000;
 constexpr uint64_t kSleepCheckMs = 500;
+/** Woken from that sleep, now playing shows the loading face -- controls
+ *  dimmed, a short arc travelling the volume ring -- until Home Assistant
+ *  answers, and taps made meanwhile wait for it. Given up after this long
+ *  (the Wi-Fi cards take over from there). */
+constexpr unsigned long kWakeLoadingMaxMs = 15000;
+/** One step of the arc travelling the ring, and one full lap. */
+constexpr unsigned long kWakeLoadingFrameMs = 40;
+constexpr unsigned long kWakeLoadingLapMs = 1600;
+/** At or below this charge, and not charging, the battery goes red and is
+ *  shown on now playing's top line as well as standby's. About a day left
+ *  at Puck 1's rate. */
+constexpr int kBatteryLowPercent = 15;
 /** The lock (PWR and BOOT together, on a board with both): how long the pair
  *  must be held to unlock, and how long a touch while locked shows how. */
 constexpr unsigned long kUnlockHoldMs = 1000;

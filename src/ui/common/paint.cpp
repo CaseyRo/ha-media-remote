@@ -479,7 +479,7 @@ void bolt(float x, float y, float w, float h, uint16_t color) {
 }
 
 void mask(int x, int y, int w, int h, const uint8_t* coverage,
-          uint16_t color) {
+          uint16_t color, uint8_t alpha) {
   Target t;
   if (!target(t, nullptr) || coverage == nullptr) {
     return;
@@ -493,7 +493,8 @@ void mask(int x, int y, int w, int h, const uint8_t* coverage,
     for (int mx = 0; mx < w; ++mx) {
       const int px = x + mx;
       if (px >= t.x0 && px < t.x1 && row[mx] != 0) {
-        plot(t, px, py, color, row[mx] + (row[mx] >> 7));
+        const int a = row[mx] + (row[mx] >> 7);
+        plot(t, px, py, color, alpha == 255 ? a : a * (alpha + 1) >> 8);
       }
     }
   }

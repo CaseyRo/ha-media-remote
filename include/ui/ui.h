@@ -256,6 +256,13 @@ void showSettingsCleared();
 
 /** Cheap partial repaints that skip a full compose. */
 void refreshElapsed(const services::ha::PlayerState& state);
+/** The loading face's arc, `elapsed_ms` into the wake, on now playing. */
+void tickWaking(const services::ha::PlayerState& state,
+                unsigned long elapsed_ms);
+/** On a board with a battery, at config::kBatteryLowPercent or less and not
+ *  charging: the battery, red, on the top line, and true. False, and nothing
+ *  drawn, otherwise. Into the frame being composed. */
+bool drawLowBattery();
 
 // --- Panel power -----------------------------------------------------------
 

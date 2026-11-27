@@ -55,7 +55,8 @@ void roundCorners(int x, int y, int size, float r, uint16_t outside);
 
 /** `color` laid over the frame at (x, y) by `coverage`, `w` x `h` bytes,
  *  row-major, 255 for solid. */
-void mask(int x, int y, int w, int h, const uint8_t* coverage, uint16_t color);
+void mask(int x, int y, int w, int h, const uint8_t* coverage, uint16_t color,
+          uint8_t alpha = 255);
 
 /**
  * The cover's frame for now playing. Call with the cover already drawn

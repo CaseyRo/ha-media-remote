@@ -115,6 +115,10 @@ struct PlayerState {
    *  for config::kHaOfflineMarkMs, so this is the last state there was and
    *  now playing says so. */
   bool offline = false;
+  /** Set by the app, not the server: just woken from sleep, Home Assistant
+   *  not heard from since, so the controls are not live yet and now playing
+   *  shows the loading face. Wins over `offline`. */
+  bool waking = false;
   /** Seconds. duration <= 0 means the player reports no progress. */
   float duration_s = 0.0f;
   /** Position already advanced by the age of HA's last position update. */

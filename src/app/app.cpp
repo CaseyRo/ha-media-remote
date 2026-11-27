@@ -132,6 +132,20 @@ std::atomic<bool> g_repaint_after_drag{false};
  *  playing is the last state there was, and says so. Written by the poll
  *  task, which sets g_state_dirty when it changes. */
 std::atomic<bool> g_ha_offline{false};
+/** Woken from sleep and Home Assistant not heard from since: now playing
+ *  shows the loading face and the command worker holds what is tapped until
+ *  it clears (config::kWakeLoadingMaxMs at most). Set by the loop, cleared by
+ *  the poll task on its first answer or by the loop on the timeout. */
+std::atomic<bool> g_waking{false};
+unsigned long g_waking_since_ms = 0;
+/** /show?s=waking: the loading face kept up its full time, Home Assistant
+ *  answering or not, to look at it from the desk with /frame. */
+std::atomic<bool> g_waking_hold{false};
+/** Set on a wake: the poll task (the stream's owner) closes the event stream
+ *  and opens it again. A short sleep leaves it open on the face of it, and
+ *  with nothing changing nothing arrives on it, so the loading face would
+ *  wait out its whole time for a state that never came. */
+std::atomic<bool> g_stream_restart{false};
 
 /** The level last commanded on the control entity, and when -- or -1 when
  *  nothing is outstanding. Held behind g_state_mutex with g_state.
@@ -206,7 +220,8 @@ bool snapshotState(PlayerState& out) {
   bool valid = false;
   if (xSemaphoreTake(g_state_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
     out = g_state;
-    out.offline = g_ha_offline;
+    out.waking = g_waking;
+    out.offline = g_ha_offline && !out.waking;
     valid = g_state_valid;
     xSemaphoreGive(g_state_mutex);
   }
@@ -864,6 +879,12 @@ void commandTask(void*) {
     // Every 20 ms at most, so a volume asked for goes out within that.
     const bool have =
         xQueueReceive(g_command_jobs, job, pdMS_TO_TICKS(20)) == pdTRUE;
+    // Tapped while waking: kept, in order, and sent once Home Assistant
+    // answers -- or the loading face gives up -- rather than failing on a
+    // radio that is not back yet.
+    while (g_waking) {
+      vTaskDelay(pdMS_TO_TICKS(50));
+    }
     sendPendingVolume();
     if (have) {
       CommandResult r;
@@ -2877,6 +2898,10 @@ void haPollTask(void*) {
         services::browse::preload();
       }
 
+      if (g_stream_restart.exchange(false) && services::ha::streamIsOpen()) {
+        services::ha::streamClose();
+        stream_retry_at = millis();
+      }
       if (config::kHaStreamEnabled && !services::ha::streamIsOpen() &&
           static_cast<long>(millis() - stream_retry_at) >= 0) {
         // The backoff is not reset here: a server can take the connection
@@ -2915,6 +2940,11 @@ void haPollTask(void*) {
         // for it (see kCoverArtHoldMs).
         ui::requestArtwork(fresh.picture);
         publishState(fresh);
+        if (!g_waking_hold && g_waking.exchange(false)) {
+          LOG_INFO("Wake: Home Assistant back after %lu ms",
+                   millis() - g_waking_since_ms);
+          g_state_dirty = true;
+        }
 
         // What plays on this player is what plays in this room: the history
         // the swipe-up list's first two sections are built from. A new
@@ -3074,9 +3104,45 @@ void haPollTask(void*) {
     return;
   }
   s_dark_since = 0;
+  g_waking_since_ms = millis();
+  g_waking = true;
+  g_stream_restart = true;
   noteTouchWake();
   g_wifi_down_since = millis();
   g_last_reconnect_ms = millis();
+}
+
+/** The loading face after a wake: its arc moved on a step, and taken down
+ *  once kWakeLoadingMaxMs is up with no answer. Loop only. */
+[[gnu::noinline]] void handleWaking() {
+  static unsigned long s_frame_ms = 0;
+  if (!g_waking) {
+    return;
+  }
+  // Wi-Fi back: ask Home Assistant now, not when the poll's dark-time
+  // interval runs out -- that was up to 8 s more of the loading face.
+  static unsigned long s_nudged_for = 0;
+  if (s_nudged_for != g_waking_since_ms && WiFi.status() == WL_CONNECTED) {
+    s_nudged_for = g_waking_since_ms;
+    g_poll_now = true;
+  }
+  if (millis() - g_waking_since_ms >= config::kWakeLoadingMaxMs) {
+    g_waking = false;
+    g_waking_hold = false;
+    g_state_dirty = true;
+    LOG_WARN("Wake: no answer from Home Assistant, loading face down");
+    return;
+  }
+  if (g_state_dirty || ui::isBlanked() || ui::isDimmed() ||
+      g_screen != Screen::kNowPlaying || g_volume_dragging ||
+      millis() - s_frame_ms < config::kWakeLoadingFrameMs) {
+    return;
+  }
+  s_frame_ms = millis();
+  PlayerState snapshot;
+  if (snapshotState(snapshot) && snapshot.waking) {
+    ui::tickWaking(snapshot, millis() - g_waking_since_ms);
+  }
 }
 
 /** /sleep?ms=15000 on the portal: dark and asleep now, for at most that long
@@ -3148,9 +3214,14 @@ void registerShowPage() {
       openPlayers();
     } else if (s == "now") {
       showNowPlaying();
+    } else if (s == "waking") {
+      g_waking_since_ms = millis();
+      g_waking_hold = true;
+      g_waking = true;
+      showNowPlaying();
     } else {
       server.send(404, "text/plain",
-                  "s= list, settings, status, search, players or now");
+                  "s= list, settings, status, search, players, now or waking");
       return;
     }
     server.send(200, "text/plain", "ok");
@@ -3314,6 +3385,7 @@ void loop() {
   PERF_TIMED("handleLockHint", handleLockHint());
   PERF_TIMED("handleDimming", handleDimming());
   PERF_TIMED("handleSleep", handleSleep());
+  PERF_TIMED("handleWaking", handleWaking());
   PERF_TIMED("handleElapsedTick", handleElapsedTick());
 
   perf::record("pass", millis() - pass_t0);
